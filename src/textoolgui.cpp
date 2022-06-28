@@ -39,6 +39,10 @@ Image2d imgout;
 
 static void expand()
 {
+    // here we calculate with half coords, so that (0,0) is always the center point.
+    // width/height are always max()'d so that the larger extent to either side is the defining maximum.
+
+    /*
     glm::ivec2 reqsize = texsize + glm::abs(textranslate);
 
     reqsize.x = nextPowerOf2(reqsize.x);
@@ -52,7 +56,7 @@ static void expand()
     imgout.init(reqsize.x, reqsize.y);
 
     imgout.fill(transparent);
-
+    */
 
 
 }
@@ -79,31 +83,30 @@ static void drawMain()
         unsigned ticks = SDL_GetTicks();
         const float timer = float(ticks) * 0.1f;
 
-;       const glm::vec2 ts = glm::vec2(texsize);
+        const glm::vec2 ts = glm::vec2(texsize);
+        const glm::vec2 ts2 = 0.5f * ts;
         const float texaspect = ts.x / ts.y;
-        const float winmin = glm::min(fw, fh);
         const float texmin = glm::min(ts.x, ts.y);
-        const float texmax = glm::max(ts.x, ts.y);
 
         const float tx = texmin * texaspect;
         const float ty = texmin;
 
-        glm::mat4 om = glm::translate(glm::vec3(glm::vec2(clickpos), 0.0f));               // offset matrix: place object
-        glm::mat4 tm = glm::translate(glm::vec3(glm::vec2(tx,ty) * textransperc, 0.0f));   // translation relative to rotation point
-        glm::mat4 rm = glm::rotate(timer, glm::vec3(0.0f, 0.0f, 1.0f));                    // rotation
-        glm::mat4 sm = glm::scale(glm::vec3(scale));                                       // scale
+        glm::mat4 om = glm::translate(glm::vec3(glm::vec2(clickpos), 0.0f)); // offset matrix: place object
+        glm::mat4 tm = glm::translate(glm::vec3(-ts2 * textransperc, 0.0f)); // translation relative to rotation point
+        glm::mat4 rm = glm::rotate(timer, glm::vec3(0.0f, 0.0f, 1.0f));      // rotation
+        glm::mat4 sm = glm::scale(glm::vec3(scale));                         // scale
         glm::mat4 m = om * rm * sm * tm;
 
-        glm::vec4 ul = m * glm::vec4( tx,  ty,  0.0f, 1.0f);
-        glm::vec4 ur = m * glm::vec4(-tx,  ty,  0.0f, 1.0f);
-        glm::vec4 lr = m * glm::vec4(-tx, -ty,  0.0f, 1.0f);
-        glm::vec4 ll = m * glm::vec4( tx, -ty,  0.0f, 1.0f);
+        glm::vec4 ul = m * glm::vec4( ts2.x,  ts2.y,  0.0f, 1.0f);
+        glm::vec4 ur = m * glm::vec4(-ts2.x,  ts2.y,  0.0f, 1.0f);
+        glm::vec4 lr = m * glm::vec4(-ts2.x, -ts2.y,  0.0f, 1.0f);
+        glm::vec4 ll = m * glm::vec4( ts2.x, -ts2.y,  0.0f, 1.0f);
 
 
-        static const SDL_FPoint tc_ul = { 0, 0 };
-        static const SDL_FPoint tc_ur = { 1, 0 };
-        static const SDL_FPoint tc_lr = { 1, 1 };
-        static const SDL_FPoint tc_ll = { 0, 1 };
+        static const SDL_FPoint tc_ul = { 1, 1 };
+        static const SDL_FPoint tc_ur = { 0, 1 };
+        static const SDL_FPoint tc_lr = { 0, 0 };
+        static const SDL_FPoint tc_ll = { 1, 0 };
         static const SDL_Color col = { 255, 255, 255, 170 };
         SDL_Vertex verts[] =
         {
@@ -119,6 +122,7 @@ static void drawMain()
         };
         SDL_RenderGeometry(renderer, tex, verts, Countof(verts), indices, Countof(indices));
 
+        // draw image bounding box
         SDL_FPoint points[] =
         {
             {ul.x + fw2, ul.y + fh2},
@@ -130,11 +134,11 @@ static void drawMain()
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 150);
         SDL_RenderDrawLinesF(renderer, points, Countof(points));
 
-
-        glm::vec4 ula = m * glm::vec4( tx - inAABB.x1,  ty - inAABB.y2,  0.0f, 1.0f);
-        glm::vec4 ura = m * glm::vec4(-tx + inAABB.x2,  ty - inAABB.y2,  0.0f, 1.0f);
-        glm::vec4 lra = m * glm::vec4(-tx + inAABB.x2, -ty + inAABB.y1,  0.0f, 1.0f);
-        glm::vec4 lla = m * glm::vec4( tx - inAABB.x1, -ty + inAABB.y1,  0.0f, 1.0f);
+        // draw alpha bounding box
+        glm::vec4 ula = m * glm::vec4(inAABB.x1 - ts2.x, inAABB.y1 - ts2.y,  0.0f, 1.0f);
+        glm::vec4 ura = m * glm::vec4(inAABB.x2 - ts2.x, inAABB.y1 - ts2.y,  0.0f, 1.0f);
+        glm::vec4 lra = m * glm::vec4(inAABB.x2 - ts2.x, inAABB.y2 - ts2.y,  0.0f, 1.0f);
+        glm::vec4 lla = m * glm::vec4(inAABB.x1 - ts2.x, inAABB.y2 - ts2.y,  0.0f, 1.0f);
         SDL_FPoint pointsa[] =
         {
             {ula.x + fw2, ula.y + fh2},
