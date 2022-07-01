@@ -72,32 +72,21 @@ static void resetRotPoint()
 
 static void fitToSize()
 {
+    const glm::ivec2 rotPointTexAbs = (texsize / 2) + textranslate;
+    const glm::ivec2 rotPointAABBAbs = rotPointTexAbs - glm::ivec2(inAABB.x1, inAABB.y1);
 
-    const glm::ivec2 currentAABBSize = glm::ivec2(inAABB.width(), inAABB.height());
-    const glm::ivec2 currentAABBCenter = glm::ivec2((inAABB.x1 + inAABB.x2) / 2, (inAABB.y1 + inAABB.y2) / 2);
+    const unsigned maxX = glm::max(rotPointAABBAbs.x, (int)inAABB.width() - rotPointAABBAbs.x);
+    const unsigned maxY = glm::max(rotPointAABBAbs.y, (int)inAABB.height() - rotPointAABBAbs.y);
 
-    const glm::ivec2 currentTranslatedCenter = currentAABBCenter - textranslate;
+    const unsigned texSizeX = nextPowerOf2(2 * maxX);
+    const unsigned texSizeY = nextPowerOf2(2 * maxY);
 
-    // now that we have the center point, adjust sizes until all requirements are satisfied
+    const glm::ivec2 newTexCenter(texSizeX / 2, texSizeY / 2);
+    const glm::ivec2 newTexTopLeft = newTexCenter - rotPointAABBAbs;
 
-    // starting from here we calculate with half coords, so that (0,0) is always the center point.
-    // width/height are always max()'d so that the larger extent to either side is the defining maximum.
-    const glm::ivec2 bottomright = currentTranslatedCenter + (currentAABBSize + 1) / 2;
-    const glm::ivec2 topleft = currentTranslatedCenter - (currentAABBSize + 1) / 2; // make sure we don't lose a pixel if odd
-    glm::ivec2 extent = glm::max(glm::abs(topleft), glm::abs(bottomright));
-
-    //extent = glm::min(extent, currentAABBSize + glm::abs(textranslate)); // not enough
-
-    // make sure each half side is NPOT
-    extent.x = nextPowerOf2(extent.x);
-    extent.y = nextPowerOf2(extent.y);
-
-    const glm::ivec2 newCenter = (extent / 2);
-    const glm::ivec2 newTopLeft = newCenter - (currentAABBSize / 2) - textranslate;
-
-    imgout.init(extent.x, extent.y);
+    imgout.init(texSizeX, texSizeY);
     imgout.fill(transparent);
-    imgout.copy2d(newTopLeft.x, newTopLeft.y, imgin, inAABB.x1, inAABB.y1, inAABB.width(), inAABB.height());
+    imgout.copy2d(newTexTopLeft.x, newTexTopLeft.y, imgin, inAABB.x1, inAABB.y1, inAABB.width(), inAABB.height());
 
     imgin = imgout;
     onUpdateTex();
@@ -108,6 +97,11 @@ static void fitToSize()
 static void drawWindow()
 {
     ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
+
+    ImGui::Text("RotPRel: %d, %d", textranslate.x, textranslate.y);
+
+    const glm::ivec2 rotPoint = (texsize / 2)+ textranslate;
+    ImGui::Text("RotPAbs: %d, %d", rotPoint.x, rotPoint.y);
 
     ImGui::Checkbox("BBox", &showbbox);
 
@@ -219,7 +213,7 @@ static void onFocusPixel_R(int x, int y)
     glm::vec2 ts = glm::vec2(texsize);
     glm::vec2 scaled = ts * perc;
     //printf("pixel = %d, %d\n", int(scaled.x), int(scaled.y));
-    textranslate = (texsize / 2) - glm::ivec2(scaled);
+    textranslate = glm::ivec2(scaled) - (texsize / 2);
     //printf("move = %d, %d\n", textranslate.x, textranslate.y);
 }
 
