@@ -24,8 +24,8 @@ static ImVec4 clear_color = ImVec4(0.0f, 0.0f, 0.0f, 1.00f);
 static const Pixel transparent = { 0, 0, 0, 0 };
 
 // input tex
-Image2d imgin;
-AABB inAABB;
+static Image2d imgin;
+static AABB inAABB;
 static SDL_Texture *tex;
 static glm::ivec2 texsize;
 static glm::ivec2 textranslate;
@@ -34,36 +34,88 @@ static glm::ivec2 clickpos;
 static float scale = 1.0f;
 
 // output tex
-Image2d imgout;
+static Image2d imgout;
+
+// display options
+static bool showbbox = true;
 
 
-static void expand()
+static void onUpdateTex()
 {
-    // here we calculate with half coords, so that (0,0) is always the center point.
+    inAABB = imgin.getAlphaRegion();
+
+    if(tex)
+    {
+        SDL_DestroyTexture(tex);
+        tex = NULL;
+    }
+
+    tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STATIC, (int)imgin.width(), (int)imgin.height());
+    SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
+    SDL_UpdateTexture(tex, NULL, imgin.data(), 4 * imgin.width());
+    texsize = glm::vec2((float)imgin.width(), (float)imgin.height());
+}
+
+static void setTex(const char *fn)
+{
+    if(!imgin.load(fn))
+        return;
+    onUpdateTex();
+}
+
+static void resetRotPoint()
+{
+    textranslate = glm::ivec2(0);
+    textransperc = glm::vec2(0);
+}
+
+
+static void fitToSize()
+{
+
+    const glm::ivec2 currentAABBSize = glm::ivec2(inAABB.width(), inAABB.height());
+    const glm::ivec2 currentAABBCenter = glm::ivec2((inAABB.x1 + inAABB.x2) / 2, (inAABB.y1 + inAABB.y2) / 2);
+
+    const glm::ivec2 currentTranslatedCenter = currentAABBCenter - textranslate;
+
+    // now that we have the center point, adjust sizes until all requirements are satisfied
+
+    // starting from here we calculate with half coords, so that (0,0) is always the center point.
     // width/height are always max()'d so that the larger extent to either side is the defining maximum.
+    const glm::ivec2 bottomright = currentTranslatedCenter + (currentAABBSize + 1) / 2;
+    const glm::ivec2 topleft = currentTranslatedCenter - (currentAABBSize + 1) / 2; // make sure we don't lose a pixel if odd
+    glm::ivec2 extent = glm::max(glm::abs(topleft), glm::abs(bottomright));
 
-    /*
-    glm::ivec2 reqsize = texsize + glm::abs(textranslate);
+    //extent = glm::min(extent, currentAABBSize + glm::abs(textranslate)); // not enough
 
-    reqsize.x = nextPowerOf2(reqsize.x);
-    reqsize.y = nextPowerOf2(reqsize.y);
+    // make sure each half side is NPOT
+    extent.x = nextPowerOf2(extent.x);
+    extent.y = nextPowerOf2(extent.y);
 
+    const glm::ivec2 newCenter = (extent / 2);
+    const glm::ivec2 newTopLeft = newCenter - (currentAABBSize / 2) - textranslate;
 
-
-    glm::ivec2 outcenter = reqsize / 2;
-    glm::ivec2 incenter(imgin.width(), imgin.height());
-
-    imgout.init(reqsize.x, reqsize.y);
-
+    imgout.init(extent.x, extent.y);
     imgout.fill(transparent);
-    */
+    imgout.copy2d(newTopLeft.x, newTopLeft.y, imgin, inAABB.x1, inAABB.y1, inAABB.width(), inAABB.height());
 
+    imgin = imgout;
+    onUpdateTex();
+    resetRotPoint();
 
 }
 
 static void drawWindow()
 {
     ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
+
+    ImGui::Checkbox("BBox", &showbbox);
+
+    if(ImGui::Button("Center rot point"))
+        resetRotPoint();
+
+    if(ImGui::Button("Fit to size/rot"))
+        fitToSize();
 }
 
 static void drawMain()
@@ -122,54 +174,39 @@ static void drawMain()
         };
         SDL_RenderGeometry(renderer, tex, verts, Countof(verts), indices, Countof(indices));
 
-        // draw image bounding box
-        SDL_FPoint points[] =
-        {
-            {ul.x + fw2, ul.y + fh2},
-            {ur.x + fw2, ur.y + fh2},
-            {lr.x + fw2, lr.y + fh2},
-            {ll.x + fw2, ll.y + fh2},
-            {ul.x + fw2, ul.y + fh2}
-        };
-        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 150);
-        SDL_RenderDrawLinesF(renderer, points, Countof(points));
 
-        // draw alpha bounding box
-        glm::vec4 ula = m * glm::vec4(inAABB.x1 - ts2.x, inAABB.y1 - ts2.y,  0.0f, 1.0f);
-        glm::vec4 ura = m * glm::vec4(inAABB.x2 - ts2.x, inAABB.y1 - ts2.y,  0.0f, 1.0f);
-        glm::vec4 lra = m * glm::vec4(inAABB.x2 - ts2.x, inAABB.y2 - ts2.y,  0.0f, 1.0f);
-        glm::vec4 lla = m * glm::vec4(inAABB.x1 - ts2.x, inAABB.y2 - ts2.y,  0.0f, 1.0f);
-        SDL_FPoint pointsa[] =
+        if(showbbox)
         {
-            {ula.x + fw2, ula.y + fh2},
-            {ura.x + fw2, ura.y + fh2},
-            {lra.x + fw2, lra.y + fh2},
-            {lla.x + fw2, lla.y + fh2},
-            {ula.x + fw2, ula.y + fh2}
-        };
-        SDL_SetRenderDrawColor(renderer, 255, 100, 255, 150);
-        SDL_RenderDrawLinesF(renderer, pointsa, Countof(pointsa));
+            // draw image bounding box
+            SDL_FPoint points[] =
+            {
+                {ul.x + fw2, ul.y + fh2},
+                {ur.x + fw2, ur.y + fh2},
+                {lr.x + fw2, lr.y + fh2},
+                {ll.x + fw2, ll.y + fh2},
+                {ul.x + fw2, ul.y + fh2}
+            };
+            SDL_SetRenderDrawColor(renderer, 255, 255, 255, 150);
+            SDL_RenderDrawLinesF(renderer, points, Countof(points));
+
+            // draw alpha bounding box
+            glm::vec4 ula = m * glm::vec4(inAABB.x1 - ts2.x, inAABB.y1 - ts2.y,  0.0f, 1.0f);
+            glm::vec4 ura = m * glm::vec4(inAABB.x2 - ts2.x, inAABB.y1 - ts2.y,  0.0f, 1.0f);
+            glm::vec4 lra = m * glm::vec4(inAABB.x2 - ts2.x, inAABB.y2 - ts2.y,  0.0f, 1.0f);
+            glm::vec4 lla = m * glm::vec4(inAABB.x1 - ts2.x, inAABB.y2 - ts2.y,  0.0f, 1.0f);
+            SDL_FPoint pointsa[] =
+            {
+                {ula.x + fw2, ula.y + fh2},
+                {ura.x + fw2, ura.y + fh2},
+                {lra.x + fw2, lra.y + fh2},
+                {lla.x + fw2, lla.y + fh2},
+                {ula.x + fw2, ula.y + fh2}
+            };
+            SDL_SetRenderDrawColor(renderer, 255, 100, 255, 150);
+            SDL_RenderDrawLinesF(renderer, pointsa, Countof(pointsa));
+        }
 
     }
-}
-
-static void setTex(const char *fn)
-{
-    if(!imgin.load(fn))
-        return;
-
-    inAABB = imgin.getAlphaRegion();
-
-    if(tex)
-    {
-        SDL_DestroyTexture(tex);
-        tex = NULL;
-    }
-
-    tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STATIC, (int)imgin.width(), (int)imgin.height());
-    SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
-    SDL_UpdateTexture(tex, NULL, imgin.data(), 4 * imgin.width());
-    texsize = glm::vec2((float)imgin.width(), (float)imgin.height());
 }
 
 static void onFocusPixel_R(int x, int y)

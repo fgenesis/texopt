@@ -10,8 +10,8 @@ struct Pixel
 struct AABB
 {
     size_t x1, y1, x2, y2; // inclusive
-    inline size_t width() const  { return x2 - x1; }
-    inline size_t height() const { return y2 - y1; }
+    inline size_t width() const  { return x2 - x1 + 1; }
+    inline size_t height() const { return y2 - y1 + 1; }
 };
 
 

@@ -39,11 +39,11 @@ public:
     void copy2d(size_t dstx, size_t dsty, const Array2d<T>& src, size_t srcx, size_t srcy, size_t w, size_t h)
     {
         assert(dstx + w < width());
-        assert(dsty + h < heigth());
+        assert(dsty + h < height());
         assert(srcx + w < src.width());
         assert(srcy + h < src.height());
 
-        for(size_t y < 0; y < h; ++y)
+        for(size_t y = 0; y < h; ++y)
         {
             T *dstrow = row(dsty + y);
             const T *srcrow = src.row(srcy + y);
