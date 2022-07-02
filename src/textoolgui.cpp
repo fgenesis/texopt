@@ -8,6 +8,8 @@
 #include "imgui_impl_sdl.h"
 #include "imgui_impl_sdlrenderer.h"
 #include <stdio.h>
+#include <string>
+#include <direct.h>
 
 #include "stb_image.h"
 #include "util.h"
@@ -15,6 +17,15 @@
 #include "glm/gtx/transform.hpp"
 #include <assert.h>
 #include "image2d.h"
+#include <nfd.h>
+
+static const char DIRSEP =
+#ifdef _WIN32
+    '\\'
+#else
+    '/'
+#endif
+    ;
 
 
 SDL_Window* window;
@@ -41,6 +52,12 @@ static Image2d imgout;
 static bool showbbox = true;
 
 
+static glm::uvec2 nextPowerOf2(glm::uvec2 in)
+{
+    return glm::uvec2(nextPowerOf2(in.x), nextPowerOf2(in.y));
+}
+
+
 static void onUpdateTex()
 {
     inAABB = imgin.getAlphaRegion();
@@ -61,6 +78,7 @@ static void setTex(const char *fn)
 {
     if(!imgin.load(fn))
         return;
+    imgout = imgin;
     onUpdateTex();
 }
 
@@ -103,32 +121,21 @@ static void _fitToSize(const Image2d& src, const AABB& aabb, const glm::ivec2& t
 static void fitToSize()
 {
     _fitToSize(imgin, inAABB, textranslate);
-
-    /*glm::ivec2 xlat = textranslate + glm::ivec2(inAABB.x1, inAABB.y1);
-    
-    Image2d cutout;
-    makeCutout(cutout, imgin, inAABB);
-    AABB aabb;
-    aabb.x1 = 0;
-    aabb.y1 = 0;
-    aabb.x2 = inAABB.width() - 1;
-    aabb.x2 = inAABB.height() - 1;
-    _fitToSize(cutout, aabb, textranslate);*/
 }
 
-static glm::ivec2 getScaledSize()
+static glm::uvec2 getScaledSize()
 {
-    return glm::max(glm::ivec2(1), glm::ivec2(imgin.width() * rescale, imgin.height() * rescale));
+    return glm::max(glm::uvec2(1), glm::uvec2(imgin.width() * rescale, imgin.height() * rescale));
 }
 
 static void scaleImg()
 {
-    glm::ivec2 sz = getScaledSize();
+    glm::uvec2 sz = getScaledSize();
     Image2d sc(sz.x, sz.y);
     sc.copyscaled(imgin);
 
-    const glm::ivec2 psz(nextPowerOf2(sz.x), nextPowerOf2(sz.y));
-    const glm::ivec2 halfborder = (psz - sz) / 2;
+    const glm::uvec2 psz = nextPowerOf2(sz);
+    const glm::uvec2 halfborder = (psz - sz) / 2u;
     imgout.init(psz.x, psz.y);
     imgout.copy2d(halfborder.x, halfborder.y, sc, 0, 0, sc.width(), sc.height());
 
@@ -136,26 +143,90 @@ static void scaleImg()
     onUpdateTex();
 }
 
+static std::string s_outDir;
+
+static void ensureLastDirsep(std::string& s)
+{
+    if(!s.empty() && s.back() != DIRSEP)
+        s += DIRSEP;
+}
+
+static void ensureOutDir()
+{
+    if(s_outDir.empty())
+    {
+        char buf[1024];
+        char *wd = getcwd(buf, sizeof(buf));
+        if(wd)
+        {
+            s_outDir = wd;
+            ensureLastDirsep(s_outDir);
+        }
+    }
+}
+
+static void pickOutDir()
+{
+    ensureOutDir();
+    nfdchar_t *outPath = NULL;
+    nfdresult_t res = NFD_PickFolder(s_outDir.c_str(), &outPath);
+    if(res == NFD_OKAY)
+    {
+        s_outDir = outPath;
+        free(outPath);
+        ensureLastDirsep(s_outDir);
+    }
+}
+
+static void saveImg(const char *fn)
+{
+    if(!fn || !*fn)
+    {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error!", "file name plz", window);
+        return;
+    }
+
+    std::string out = s_outDir + fn + ".png";
+    if(!imgout.writePNG(out.c_str()))
+    {
+        out = "Failed to write PNG:\n" + out;
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error!", out.c_str(), window);
+    }
+}
+
+char s_savename[64];
+
 static void drawWindow()
 {
     ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
 
-    ImGui::Text("RotPRel: %d, %d", textranslate.x, textranslate.y);
-
-    const glm::ivec2 rotPoint = (texsize / 2)+ textranslate;
-    ImGui::Text("RotPAbs: %d, %d", rotPoint.x, rotPoint.y);
+    const glm::ivec2 rotPoint = (texsize / 2) + textranslate;
+    ImGui::Text("Rot Rel: (%d, %d); Abs: (%d, %d)", textranslate.x, textranslate.y,  rotPoint.x, rotPoint.y);
 
     ImGui::Checkbox("BBox", &showbbox);
-
+    ImGui::SameLine();
     if(ImGui::Button("Center rot point"))
         resetRotPoint();
-
+    ImGui::SameLine();
     if(ImGui::Button("Fit to size/rot"))
         fitToSize();
 
-    ImGui::SliderFloat("Scale factor", &rescale, 0, 1);
+    ImGui::SliderFloat("##scaleslider", &rescale, 0, 1);
+    ImGui::SameLine();
     if(ImGui::Button("Rescale"))
         scaleImg();
+    glm::uvec2 ss = getScaledSize();
+    glm::uvec2 sp = nextPowerOf2(ss);
+    ImGui::Text("Target size: (%u, %u) -> (%u, %u)", ss.x, ss.y, sp.x, sp.y);
+
+    if(ImGui::Button("Pick out dir"))
+        pickOutDir();
+    ImGui::SameLine(0, 5);
+
+    ImGui::InputText("##savename", s_savename, sizeof(s_savename));
+    ImGui::SameLine();
+    if(ImGui::Button("Save"))
+        saveImg(s_savename);
 }
 
 static void drawMain()
