@@ -7,4 +7,4 @@ set(src
 )
 
 add_executable(textoolgui ${src})
-target_link_libraries(textoolgui dep imgui ${SDL2_LIBRARY})
+target_link_libraries(textoolgui dep imgui nfd ${SDL2_LIBRARY})
