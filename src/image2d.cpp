@@ -1,6 +1,7 @@
 #include "image2d.h"
 #include "stb_image.h"
 #include "stb_image_write.h"
+#include "stb_image_resize.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -83,4 +84,11 @@ AABB Image2d::getAlphaRegion() const
         }
 
     return ext;
+}
+
+void Image2d::copyscaled(const Image2d& src)
+{
+    stbir_resize_uint8(
+        (const unsigned char*)src.data(), src.width(), src.height(), 0,
+        (unsigned char*)data(), _w, _h, 0, 4);
 }

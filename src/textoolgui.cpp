@@ -31,7 +31,8 @@ static glm::ivec2 texsize;
 static glm::ivec2 textranslate;
 static glm::vec2 textransperc;
 static glm::ivec2 clickpos;
-static float scale = 1.0f;
+static float rescale = 1.0f;
+static float displayscale = 1.0f;
 
 // output tex
 static Image2d imgout;
@@ -69,14 +70,20 @@ static void resetRotPoint()
     textransperc = glm::vec2(0);
 }
 
-
-static void fitToSize()
+static void makeCutout(Image2d& dst, const Image2d& src, const AABB& aabb)
 {
-    const glm::ivec2 rotPointTexAbs = (texsize / 2) + textranslate;
-    const glm::ivec2 rotPointAABBAbs = rotPointTexAbs - glm::ivec2(inAABB.x1, inAABB.y1);
+    dst.init(aabb.width(), aabb.height());
+    dst.copy2d(0, 0, src, aabb.x1, aabb.y1, aabb.width(), aabb.height());
+}
 
-    const unsigned maxX = glm::max(rotPointAABBAbs.x, (int)inAABB.width() - rotPointAABBAbs.x);
-    const unsigned maxY = glm::max(rotPointAABBAbs.y, (int)inAABB.height() - rotPointAABBAbs.y);
+static void _fitToSize(const Image2d& src, const AABB& aabb, const glm::ivec2& translate)
+{
+    const glm::ivec2 ts = glm::ivec2(src.width(), src.height());
+    const glm::ivec2 rotPointTexAbs = (ts / 2) + translate;
+    const glm::ivec2 rotPointAABBAbs = rotPointTexAbs - glm::ivec2(aabb.x1, aabb.y1);
+
+    const unsigned maxX = glm::max(rotPointAABBAbs.x, (int)aabb.width() - rotPointAABBAbs.x);
+    const unsigned maxY = glm::max(rotPointAABBAbs.y, (int)aabb.height() - rotPointAABBAbs.y);
 
     const unsigned texSizeX = nextPowerOf2(2 * maxX);
     const unsigned texSizeY = nextPowerOf2(2 * maxY);
@@ -86,12 +93,47 @@ static void fitToSize()
 
     imgout.init(texSizeX, texSizeY);
     imgout.fill(transparent);
-    imgout.copy2d(newTexTopLeft.x, newTexTopLeft.y, imgin, inAABB.x1, inAABB.y1, inAABB.width(), inAABB.height());
+    imgout.copy2d(newTexTopLeft.x, newTexTopLeft.y, src, aabb.x1, aabb.y1, aabb.width(), aabb.height());
 
     imgin = imgout;
     onUpdateTex();
     resetRotPoint();
+}
 
+static void fitToSize()
+{
+    _fitToSize(imgin, inAABB, textranslate);
+
+    /*glm::ivec2 xlat = textranslate + glm::ivec2(inAABB.x1, inAABB.y1);
+    
+    Image2d cutout;
+    makeCutout(cutout, imgin, inAABB);
+    AABB aabb;
+    aabb.x1 = 0;
+    aabb.y1 = 0;
+    aabb.x2 = inAABB.width() - 1;
+    aabb.x2 = inAABB.height() - 1;
+    _fitToSize(cutout, aabb, textranslate);*/
+}
+
+static glm::ivec2 getScaledSize()
+{
+    return glm::max(glm::ivec2(1), glm::ivec2(imgin.width() * rescale, imgin.height() * rescale));
+}
+
+static void scaleImg()
+{
+    glm::ivec2 sz = getScaledSize();
+    Image2d sc(sz.x, sz.y);
+    sc.copyscaled(imgin);
+
+    const glm::ivec2 psz(nextPowerOf2(sz.x), nextPowerOf2(sz.y));
+    const glm::ivec2 halfborder = (psz - sz) / 2;
+    imgout.init(psz.x, psz.y);
+    imgout.copy2d(halfborder.x, halfborder.y, sc, 0, 0, sc.width(), sc.height());
+
+    imgin = imgout;
+    onUpdateTex();
 }
 
 static void drawWindow()
@@ -110,6 +152,10 @@ static void drawWindow()
 
     if(ImGui::Button("Fit to size/rot"))
         fitToSize();
+
+    ImGui::SliderFloat("Scale factor", &rescale, 0, 1);
+    if(ImGui::Button("Rescale"))
+        scaleImg();
 }
 
 static void drawMain()
@@ -140,7 +186,7 @@ static void drawMain()
         glm::mat4 om = glm::translate(glm::vec3(glm::vec2(clickpos), 0.0f)); // offset matrix: place object
         glm::mat4 tm = glm::translate(glm::vec3(-ts2 * textransperc, 0.0f)); // translation relative to rotation point
         glm::mat4 rm = glm::rotate(timer, glm::vec3(0.0f, 0.0f, 1.0f));      // rotation
-        glm::mat4 sm = glm::scale(glm::vec3(scale));                         // scale
+        glm::mat4 sm = glm::scale(glm::vec3(displayscale * rescale));        // scale
         glm::mat4 m = om * rm * sm * tm;
 
         glm::vec4 ul = m * glm::vec4( ts2.x,  ts2.y,  0.0f, 1.0f);
@@ -303,7 +349,7 @@ int main(int, char**)
                 if(event.type == SDL_MOUSEWHEEL)
                 {
                     float m = 1.0f + (event.wheel.y * 0.15f);
-                    scale *= m;
+                    displayscale *= m;
                 }
             }
         }

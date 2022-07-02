@@ -23,5 +23,6 @@ public:
     bool writePNG(const char* fn);
     bool load(const char* fn);
     AABB getAlphaRegion() const;
+    void copyscaled(const Image2d& src); // resize this to desired size before calling this
 
 };
