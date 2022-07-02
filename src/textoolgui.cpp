@@ -128,6 +128,11 @@ static glm::uvec2 getScaledSize()
     return glm::max(glm::uvec2(1), glm::uvec2(imgin.width() * rescale, imgin.height() * rescale));
 }
 
+static glm::uvec2 getScaledBBoxSize()
+{
+    return glm::max(glm::uvec2(1), glm::uvec2(inAABB.width() * rescale, inAABB.height() * rescale));
+}
+
 static void scaleImg()
 {
     if(rescale >= 1.0f)
@@ -205,7 +210,9 @@ char s_savename[64];
 
 static void drawWindow()
 {
-    ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
+    ImGui::ColorEdit3("clear color", (float*)&clear_color);
+
+    ImGui::Text("Tex size: (%d, %d); BBox: (%d, %d)", texsize.x, texsize.y, (int)inAABB.width(), (int)inAABB.height());
 
     const glm::ivec2 rotPoint = (texsize / 2) + textranslate;
     ImGui::Text("Rot Rel: (%d, %d); Abs: (%d, %d)", textranslate.x, textranslate.y,  rotPoint.x, rotPoint.y);
@@ -222,14 +229,13 @@ static void drawWindow()
     ImGui::SameLine();
     if(ImGui::Button("Rescale"))
         scaleImg();
-    glm::uvec2 ss = getScaledSize();
+    glm::uvec2 ss = getScaledBBoxSize();
     glm::uvec2 sp = nextPowerOf2(ss);
-    ImGui::Text("Target size: (%u, %u) -> (%u, %u)", ss.x, ss.y, sp.x, sp.y);
+    ImGui::Text("Scaled BBox: (%u, %u) -> (%u, %u)", ss.x, ss.y, sp.x, sp.y);
 
-    if(ImGui::Button("Pick out dir"))
+    if(ImGui::Button("Dst dir?"))
         pickOutDir();
-    ImGui::SameLine(0, 5);
-
+    ImGui::SameLine();
     ImGui::InputText("##savename", s_savename, sizeof(s_savename));
     ImGui::SameLine();
     if(ImGui::Button("Save"))
