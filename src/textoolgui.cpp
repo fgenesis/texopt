@@ -130,6 +130,9 @@ static glm::uvec2 getScaledSize()
 
 static void scaleImg()
 {
+    if(rescale >= 1.0f)
+        return;
+
     glm::uvec2 sz = getScaledSize();
     Image2d sc(sz.x, sz.y);
     sc.copyscaled(imgin);
@@ -137,10 +140,14 @@ static void scaleImg()
     const glm::uvec2 psz = nextPowerOf2(sz);
     const glm::uvec2 halfborder = (psz - sz) / 2u;
     imgout.init(psz.x, psz.y);
+    imgout.fill(transparent);
     imgout.copy2d(halfborder.x, halfborder.y, sc, 0, 0, sc.width(), sc.height());
 
     imgin = imgout;
     onUpdateTex();
+
+    resetRotPoint();
+    fitToSize();
 }
 
 static std::string s_outDir;

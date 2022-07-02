@@ -88,7 +88,9 @@ AABB Image2d::getAlphaRegion() const
 
 void Image2d::copyscaled(const Image2d& src)
 {
-    stbir_resize_uint8(
+    stbir_resize_uint8_generic(
         (const unsigned char*)src.data(), src.width(), src.height(), 0,
-        (unsigned char*)data(), _w, _h, 0, 4);
+        (unsigned char*)data(), _w, _h, 0, 4,
+        3, 0, STBIR_EDGE_CLAMP, STBIR_FILTER_DEFAULT, STBIR_COLORSPACE_LINEAR, NULL
+    );
 }
