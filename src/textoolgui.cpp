@@ -394,7 +394,9 @@ int main(int, char**)
     ImGui_ImplSDL2_InitForSDLRenderer(window, renderer);
     ImGui_ImplSDLRenderer_Init(renderer);
 
+#ifdef _DEBUG
     setTex("test.png");
+#endif
 
     // Main loop
     bool done = false;
