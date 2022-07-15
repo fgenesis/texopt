@@ -1,5 +1,15 @@
 #pragma once
 
+#include <string>
+
+static const char DIRSEP =
+#ifdef _WIN32
+'\\'
+#else
+'/'
+#endif
+;
+
 namespace detail
 {
     template <typename T, size_t N>
@@ -18,3 +28,5 @@ inline unsigned nextPowerOf2(unsigned in)
     return in + 1u;
 }
 
+std::string dirname(const std::string& fn);
+std::string filename(const std::string& fn);

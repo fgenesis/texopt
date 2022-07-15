@@ -2,7 +2,10 @@ set(src
     array2d.h
     image2d.cpp
     image2d.h
+    util.cpp
     util.h
+    texture.cpp
+    texture.h
     textoolgui.cpp
 )
 
