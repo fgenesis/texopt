@@ -269,11 +269,6 @@ static glm::uvec2 getScaledSize(const Texture& tex)
     return glm::max(glm::uvec2(1), glm::uvec2(tex.ts * rescale));
 }
 
-static glm::uvec2 getScaledBBoxSize(const Texture& tex)
-{
-    return glm::max(glm::uvec2(1), glm::uvec2(tex.aabb.width() * rescale, tex.aabb.height() * rescale));
-}
-
 static void scaleImg()
 {
     if(rescale >= 1.0f)
@@ -415,9 +410,6 @@ static void drawWindow()
     ImGui::SameLine();
     if(ImGui::Button("Rescale"))
         scaleImg();
-    glm::uvec2 ss = getScaledBBoxSize(texin);
-    glm::uvec2 sp = nextPowerOf2(ss);
-    ImGui::Text("Scaled BBox: (%u, %u) -> (%u, %u)", ss.x, ss.y, sp.x, sp.y);
 
     ImGui::Text("%u settings here", (unsigned)settings.size());
     ImGui::SameLine();
