@@ -51,6 +51,12 @@ public:
         }
     }
 
+    void swap(Array2d<T>& other)
+    {
+        _v.swap(other._v);
+        std::swap(_w, other._w);
+        std::swap(_h, other._h);
+    }
 
 
     inline T& operator()(size_t x, size_t y)
