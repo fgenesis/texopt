@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <cmath>
 #include "util.h"
 
 template<typename R, typename A, typename F>
@@ -74,4 +75,12 @@ bool linecast(const P& p0, const P& p1, F& f, int *pCollision)
         }
     }
     return false;
+}
+
+template<typename T, typename P>
+double perpendicular_distance(P p, P p1, P p2)
+{
+    const P d { p2.x - p1.x, p2.y - p1.y };
+    T len = std::sqrt(T(d.x * d.x + d.y * d.y));
+    return std::abs(T(p.x * d.y - p.y * d.x + p2.x * p1.y - p2.y * p1.x)) / len;
 }

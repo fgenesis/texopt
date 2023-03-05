@@ -249,7 +249,7 @@ struct EmbossLine
     }
 };
 
-enum { DILATION_ROUNDS = 4 };
+enum { DILATION_ROUNDS = 3 };
 
 bool doOneImage(const char *fn)
 {
@@ -290,7 +290,8 @@ bool doOneImage(const char *fn)
     simplepolys.reserve(polys.size());
     for(size_t i = 0; i < polys.size(); ++i)
     {
-        simplepolys.push_back(polys[i].simplify(CollidesWithPixels(solid)));
+        //simplepolys.push_back(polys[i].simplify(CollidesWithPixels(solid)));
+        simplepolys.push_back(polys[i].simplifyDP(CollidesWithPixels(solid), 5));
         const Polygon& last = simplepolys.back();
         printf("Simplified polygon[%u] from %u to %u points\n", unsigned(i), (unsigned)polys[i].points.size(), (unsigned)last.points.size());
     }
@@ -316,8 +317,8 @@ bool doOneImage(const char *fn)
 int main(int argc, char *argv[])
 {
     //doOneImage("gear.png");
-    //doOneImage("face.png");
-    doOneImage("menu-frame2.png");
+    doOneImage("face.png");
+    //doOneImage("menu-frame2.png");
     //doOneImage("pyramid-dragon-bg.png");
     //doOneImage("tentacles.png");
     //doOneImage("rock0002.png");
