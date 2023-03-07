@@ -5,9 +5,15 @@
 #include <assert.h>
 #include "algo2d.h"
 
+enum PointFlags
+{
+    PT_CONVEX = 0x01
+};
+
 struct Point2d
 {
     size_t x, y;
+    PointFlags flags;
 
     inline bool operator==(const Point2d& o) const { return x == o.x && y == o.y; }
     inline bool operator!=(const Point2d& o) const { return !(*this == o); }
@@ -39,19 +45,36 @@ struct Polygon
         return points[i];
     }
 
+    size_t calcArea() const
+    {
+        int area = 0;
+        const size_t N = points.size();
+        size_t j = N-1;
+
+        for (size_t i = 0; i < N; ++i)
+        {
+            const Point2d& pi = points[i];
+            const Point2d& pj = points[j];
+            area += (int(pj.x)+int(pi.x)) * (int(pj.y)-int(pi.y));
+            j = i;
+        }
+        return (size_t)std::abs(area / 2);
+    }
+
+
     // can remove point if the new line does not cut into the pixel grid (for convex corners).
     // In case of a concave corner, the point can always be removed, because connecting our
     // two neighbors can by definition never collide with the pixel grid
     template<typename F>
-    bool canRemovePoint(int i, F& f) const
+    bool intersectSolid(int i, F& f) const
     {
         Line2d line { getPoint(i-1), getPoint(i+1) };
-        return !line.intersect(f);
+        return line.intersect(f);
     }
 
     // return simplified polygon so that every line segment passes the collision check f(x,y)
     template<typename F>
-    Polygon simplify(F& f) const
+    Polygon simplify(F& collision, const float maxdist) const
     {
         Polygon reduced;
 
@@ -67,13 +90,13 @@ struct Polygon
             if(next == first)
             {
                 // if we can see points[1] from here, the first point is unnecessary
-                if(reduced.points.size() > 1 && !linecast(anchor, reduced.points[1], f, NULL))
+                if(reduced.points.size() > 1 && !linecast(anchor, reduced.points[1], collision, NULL))
                     reduced.points[0] = anchor;
                 else
                     reduced.points.push_back(anchor);
                 break;
             }
-            if(anchor != prev && linecast(anchor, next, f, NULL))
+            if(anchor != prev && ((maxdist > 0 && point_distance<float>(anchor, next) > maxdist) || linecast(anchor, next, collision, NULL)))
             {
                 reduced.points.push_back(anchor);
                 anchor = prev; // continue from here
@@ -86,8 +109,6 @@ struct Polygon
         return reduced;
     }
 
-
-
     template<typename F>
     Polygon simplifyDP(F& f, float epsilon) const
     {
@@ -96,18 +117,18 @@ struct Polygon
         const size_t N = points.size();
         reduced.points.resize(N);
 
-        std::vector<char> canremove(N);
+        std::vector<char> keep(N);
         for(int i = 0; i < int(N); ++i)
-            canremove[i] = canRemovePoint(i, f);
-        
-        size_t nsz = douglas_peucker(&reduced.points[0], N, &points[0], &canremove[0], N, epsilon);
+            keep[i] = intersectSolid(i, f);
+
+        size_t nsz = douglas_peucker(&reduced.points[0], N, &points[0], &keep[0], N, epsilon);
         reduced.points.resize(nsz);
 
         return reduced;
     }
 
 private:
-    static size_t douglas_peucker(Point2d *pdst, size_t dstsize, const const Point2d *points, const char *canremove, size_t n, float epsilon)
+    static size_t douglas_peucker(Point2d *pdst, size_t dstsize, const Point2d *points, const char *keep, size_t n, float epsilon)
     {
         assert(n >= 2);
         assert(epsilon >= 0);
@@ -118,7 +139,7 @@ private:
 
         for (size_t i = 1; i + 1 < n; ++i)
         {
-            if(!canremove[i])
+            if(keep[i])
                 continue;
 
             float dist = perpendicular_distance<float>(points[i], points[0], points[n - 1]);
@@ -131,7 +152,7 @@ private:
 
         if (max_dist > epsilon)
         {
-            size_t n1 = douglas_peucker(pdst, dstsize, points, canremove, index + 1, epsilon);
+            size_t n1 = douglas_peucker(pdst, dstsize, points, keep, index + 1, epsilon);
             if (dstsize >= n1 - 1)
             {
                 dstsize -= n1 - 1;
@@ -140,7 +161,7 @@ private:
             else
                 dstsize = 0;
 
-            size_t n2 = douglas_peucker(pdst, dstsize, points + index, canremove + index, n - index, epsilon);
+            size_t n2 = douglas_peucker(pdst, dstsize, points + index, keep + index, n - index, epsilon);
             return n1 + n2 - 1;
         }
         if (dstsize >= 2)

@@ -10,10 +10,12 @@
 
 enum PixelFlag
 {
-    PF_EMPTY = 0,
-    PF_SOLID = 0x01, // actually solid pixels (= anything that is not fully transparent)
-    PF_DILATED = 0x02, // near solid pixels
-    PF_BOUNDARY = 0x04,
+    PF_EMPTY = 0
+   ,PF_SOLID = 0x01 // actually solid pixels (= anything that is not fully transparent)
+   ,PF_DILATED = 0x02 // near solid pixels
+   ,PF_BOUNDARY = 0x04 // after dilating, this is the boundary to the outside
+   ,PF_POLYGONBAND = 0x08 // polygon lines are only allowed in areas with this bit set
+   ,PF_USED = 0x10 // covered by polygon
 };
 PixelFlag operator|(PixelFlag a, PixelFlag b) { return PixelFlag(size_t(a) | size_t(b)); }
 PixelFlag& operator|=(PixelFlag& a, PixelFlag b) { return (a = a | b); }
@@ -65,6 +67,23 @@ static PixelFlag addDilatedFlag(const GetValue<PixelFlag>& a, size_t x, size_t y
                 if(a(x+xx,y+yy) & (PF_SOLID | PF_DILATED))
                     return here | PF_DILATED;
     }
+    return here;
+}
+
+static PixelFlag addPolygonFlag(const GetValue<PixelFlag>& a, size_t x, size_t y)
+{
+    PixelFlag here = a(x, y);
+    if(here & PF_SOLID)
+        return here; // can never construct polygon crossing solid area
+
+    if(here & PF_DILATED)
+        return here | PF_POLYGONBAND; // already dilated
+
+    for(int yy = -1; yy <= 1; ++yy)
+        for(int xx = -1; xx <= 1; ++xx)
+            if(a(x+xx,y+yy) & (PF_POLYGONBAND|PF_SOLID|PF_DILATED))
+                return here | PF_POLYGONBAND;
+
     return here;
 }
 
@@ -188,7 +207,7 @@ nextpoint:
     // no neighbor taken? must have reached start -> closed loop is complete
 
     //Point2d last = poly.points.back();
-    //assert(orig != last && std::abs(orig.x - last.x) <= 1 && std::abs(orig.y - last.y));
+    //assert(orig != last && std::abs(int(orig.x) - int(last.x)) <= 1 && std::abs(int(orig.y) - int(last.y)) <= 1);
 }
 
 static std::vector<Polygon> generatePolygons(const Meta2d& meta)
@@ -219,20 +238,23 @@ static std::vector<Polygon> generatePolygons(const Meta2d& meta)
                             polys.resize(cc);
                         generatePolygon(polys[idx], used, get, x, y, cc);
                         printf("Generated polygon with %u points for CC %u\n", (unsigned)polys[idx].points.size(), cc);
+
+                        // TODO: check if new polygon is fully contained within any other polygon
+                        // and reject it if so
                     }
                 }
         }
     return polys;
 }
 
-struct CollidesWithPixels
+struct IsOutsideOfPolygonArea
 {
-    const Flags2d& solid;
-    CollidesWithPixels(const Flags2d& solid) : solid(solid) {}
+    const Flags2d& flags;
+    IsOutsideOfPolygonArea(const Flags2d& flags) : flags(flags) {}
 
-    inline bool operator()(size_t x, size_t y)
+    inline bool operator()(size_t x, size_t y) const
     {
-        return solid(x,y) & PF_SOLID;
+        return !(flags(x,y) & PF_POLYGONBAND);
     }
 
 };
@@ -249,9 +271,127 @@ struct EmbossLine
     }
 };
 
-enum { DILATION_ROUNDS = 3 };
+template<typename F>
+static void dilate(Flags2d& solid, size_t iterations, PixelFlag oob, F& f)
+{
+    Flags2d tmp; // can't dilate into the source buffer because dilation checks for the same flag it sets...
+    for(unsigned i = 0; i < iterations; ++i)
+    {
+        tmp.swap(solid); // ... so it's buffer ping-pong then.
+        generate2(solid, GetValue<PixelFlag>(tmp, oob), f);
+    }
+}
 
-bool doOneImage(const char *fn)
+static Image2d embossImage(const Image2d& in, const std::vector<Polygon>& polys)
+{
+    Image2d out = in;
+    bool flop = false;
+    for(size_t i = 0; i < polys.size(); ++i)
+    {
+        const Polygon& poly = polys[i];
+        const int np = (int)poly.points.size();
+        for(int k = 0; k < np; ++k)
+        {
+            Line2d line { poly.getPoint(k), poly.getPoint(k+1) };
+            line.intersect(EmbossLine(out, flop ? WhitePixel : RedPixel));
+            flop = !flop;
+        }
+    }
+    return out;
+}
+
+static float shrinkageRatio(const Array2dAny& a, const Polygon& poly)
+{
+    size_t parea = poly.calcArea();
+    size_t aarea = a.width() * a.height();
+
+    return float(parea) / float(aarea);
+}
+
+static size_t calcScore(const Array2dAny& a, const Polygon& poly)
+{
+    size_t area = poly.calcArea(); // smaller is better
+
+    size_t tris = poly.points.size(); // FIXME: actually use #tris
+
+    // TODO: include relative size too
+    return tris * 150 + area;
+}
+
+
+struct Params
+{
+    size_t dilation;
+    size_t extraband;
+    size_t segmentdist;
+};
+
+static size_t doOneImage(std::vector<Polygon>& polyout, const Image2d& img, const Params& params)
+{
+    //Image2d out;
+
+    Flags2d solid;
+    generate(solid, img, isNotFullyTransparent);
+    dilate(solid, params.dilation, PF_EMPTY, addDilatedFlag);
+    generate2(solid, GetValue<PixelFlag>(solid, PF_EMPTY), addBoundaryFlag);
+    dilate(solid, params.extraband, PF_EMPTY, addPolygonFlag);
+
+    /*generate(out, solid, ShowBit(PF_BOUNDARY));
+    out.writePNG("boundary.png");
+    generate(out, solid, ShowBit(PF_DILATED));
+    out.writePNG("dilated.png");
+    generate(out, solid, ShowBit(PF_POLYGONBAND));
+    out.writePNG("polygonband.png");*/
+
+    Meta2d meta;
+    distributeConnectedRegions(meta, solid);
+
+    /*generate(out, meta, ShowBitAndCC(PF_BOUNDARY));
+    out.writePNG("cc.png");*/
+
+    std::vector<Polygon> polys = generatePolygons(meta);
+    std::vector<Polygon> simplepolys;
+    simplepolys.reserve(polys.size());
+    size_t score = 0;
+    for(size_t i = 0; i < polys.size(); ++i)
+    {
+        Polygon tmp = polys[i].simplify(IsOutsideOfPolygonArea(solid), params.segmentdist);
+        //tmp = tmp.simplifyDP(IsOutsideOfPolygonArea(solid), 3);
+
+        simplepolys.push_back(tmp);
+        const Polygon& last = simplepolys.back();
+        printf("Simplified polygon[%u] from %u to %u points\n", unsigned(i), (unsigned)polys[i].points.size(), (unsigned)last.points.size());
+
+        const size_t myscore = calcScore(img, last);
+        printf("Simple poly uses %.2f%% of original pixels, score = %u\n",
+            100 * shrinkageRatio(img, last), unsigned(myscore));
+        score += myscore;
+    }
+
+    polyout = simplepolys;
+
+    return score;
+}
+
+static const Params s_params[] =
+{
+    { 1, 3, 0 },
+    { 2, 5, 0 },
+    { 3, 4, 0 },
+    { 4, 6, 0 },
+    { 5, 6, 0 },
+    { 6, 6, 0 },
+    { 8, 8, 0 },
+    { 10, 10, 0 }
+};
+
+struct PolyResult
+{
+    std::vector<Polygon> polys;
+    size_t score;
+};
+
+static bool doOneImage(const char *fn)
 {
     Image2d img;
     if(!img.load(fn))
@@ -260,70 +400,49 @@ bool doOneImage(const char *fn)
         return false;
     }
 
-    Image2d out;
+    PolyResult polys[Countof(s_params)];
+    size_t best = size_t(-1);
+    size_t bestidx = 0;
 
-    Flags2d solid;
-    generate(solid, img, isNotFullyTransparent);
+    for(size_t i = 0; i < Countof(s_params); ++i)
     {
-        Flags2d tmp; // can't dilate into the source buffer because dilation checks for the same flag it sets...
-        for(unsigned i = 0; i < DILATION_ROUNDS; ++i)
+        size_t score = doOneImage(polys[i].polys, img, s_params[i]);
+        printf("=> Param set #%u (dilate=%u, band=%u, linelen=%u) score: %u\n",
+            unsigned(i),
+            unsigned(s_params[i].dilation),
+            unsigned(s_params[i].extraband),
+            unsigned(s_params[i].segmentdist),
+            unsigned(score)
+        );
+        polys[i].score = score;
+
+        if(score < best)
         {
-            tmp.swap(solid); // ... so it's buffer ping-pong then.
-            generate2(solid, GetValue<PixelFlag>(tmp, PF_EMPTY), addDilatedFlag);
+            best = score;
+            bestidx = i;
         }
     }
-    generate2(solid, GetValue<PixelFlag>(solid, PF_EMPTY), addBoundaryFlag);
 
-    generate(out, solid, ShowBit(PF_BOUNDARY));
-    out.writePNG("boundary.png");
-    generate(out, solid, ShowBit(PF_DILATED));
-    out.writePNG("dilated.png");
-
-    Meta2d meta;
-    distributeConnectedRegions(meta, solid);
-
-    generate(out, meta, ShowBitAndCC(PF_BOUNDARY));
-    out.writePNG("cc.png");
-
-    std::vector<Polygon> polys = generatePolygons(meta);
-    std::vector<Polygon> simplepolys;
-    simplepolys.reserve(polys.size());
-    for(size_t i = 0; i < polys.size(); ++i)
-    {
-        //simplepolys.push_back(polys[i].simplify(CollidesWithPixels(solid)));
-        simplepolys.push_back(polys[i].simplifyDP(CollidesWithPixels(solid), 5));
-        const Polygon& last = simplepolys.back();
-        printf("Simplified polygon[%u] from %u to %u points\n", unsigned(i), (unsigned)polys[i].points.size(), (unsigned)last.points.size());
-    }
-
-    out = img;
-    bool flop = false;
-    for(size_t i = 0; i < simplepolys.size(); ++i)
-    {
-        const Polygon& poly = simplepolys[i];
-        for(int k = 0; k < (int)poly.points.size(); ++k)
-        {
-            Line2d line { poly.getPoint(k), poly.getPoint(k+1) };
-            line.intersect(EmbossLine(out, flop ? WhitePixel : RedPixel));
-            flop = !flop;
-        }
-    }
-    out.writePNG("embossed.png");
+    Image2d out = embossImage(img, polys[bestidx].polys);
+    out.writePNG("embossed-best.png");
 
     return true;
 }
 
 
+
 int main(int argc, char *argv[])
 {
     //doOneImage("gear.png");
-    doOneImage("face.png");
+    //doOneImage("face.png");
     //doOneImage("menu-frame2.png");
     //doOneImage("pyramid-dragon-bg.png");
     //doOneImage("tentacles.png");
     //doOneImage("rock0002.png");
     //doOneImage("sunstatue-0001.png");
     //doOneImage("city-stairs.png");
+    //doOneImage("head.png");
+    doOneImage("bg-rock-0002.png");
 
 
     printf("Exiting.\n");

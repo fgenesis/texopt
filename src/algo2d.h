@@ -77,8 +77,16 @@ bool linecast(const P& p0, const P& p1, F& f, int *pCollision)
     return false;
 }
 
+
 template<typename T, typename P>
-double perpendicular_distance(P p, P p1, P p2)
+T point_distance(P p1, P p2)
+{
+    const P d { p2.x - p1.x, p2.y - p1.y };
+    return std::sqrt(T(d.x * d.x + d.y * d.y));
+}
+
+template<typename T, typename P>
+T perpendicular_distance(P p, P p1, P p2)
 {
     const P d { p2.x - p1.x, p2.y - p1.y };
     T len = std::sqrt(T(d.x * d.x + d.y * d.y));

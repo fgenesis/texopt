@@ -5,19 +5,30 @@
 #include <algorithm>
 #include <assert.h>
 
-template<typename T>
-class Array2d
+class Array2dAny
 {
 protected:
     size_t _w, _h;
+
+    Array2dAny() : _w(0), _h(0) {}
+    Array2dAny(size_t w, size_t h) : _w(w), _h(h) {}
+
+public:
+    size_t width() const {return _w;}
+    size_t height() const {return _h;}
+};
+
+template<typename T>
+class Array2d : public Array2dAny
+{
+protected:
     std::vector<T> _v;
 
 public:
-    Array2d() : _w(0), _h(0) {}
-    Array2d(size_t w, size_t h) : _w(w), _h(h), _v(w*h) {}
+    Array2d() : Array2dAny() {}
+    Array2d(size_t w, size_t h) : Array2dAny(w, h), _v(w*h) {}
 
-    size_t width() const {return _w;}
-    size_t height() const {return _h;}
+
     void init(size_t w, size_t h)
     {
         _w = w;
