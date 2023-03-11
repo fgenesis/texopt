@@ -15,7 +15,8 @@ enum PixelFlag
    ,PF_DILATED = 0x02 // near solid pixels
    ,PF_BOUNDARY = 0x04 // after dilating, this is the boundary to the outside
    ,PF_POLYGONBAND = 0x08 // polygon lines are only allowed in areas with this bit set
-   ,PF_USED = 0x10 // covered by polygon
+   ,PF_NO_HOLE = 0x10 // definitely not a hole
+   ,PF_USED = 0x20 // covered by polygon
 };
 PixelFlag operator|(PixelFlag a, PixelFlag b) { return PixelFlag(size_t(a) | size_t(b)); }
 PixelFlag& operator|=(PixelFlag& a, PixelFlag b) { return (a = a | b); }
@@ -70,6 +71,14 @@ static PixelFlag addDilatedFlag(const GetValue<PixelFlag>& a, size_t x, size_t y
     return here;
 }
 
+static PixelFlag closeHoles(const GetValue<PixelFlag>& a, size_t x, size_t y)
+{
+    PixelFlag here = a(x, y);
+    if(!(here & (PF_DILATED|PF_SOLID|PF_NO_HOLE)))
+        here |= PF_DILATED;
+    return here;
+}
+
 static PixelFlag addPolygonFlag(const GetValue<PixelFlag>& a, size_t x, size_t y)
 {
     PixelFlag here = a(x, y);
@@ -107,38 +116,74 @@ inline static MetaPixel initMetaPixel(PixelFlag f)
     return p;
 }
 
-struct Filler
-{
-    Filler(unsigned cc) : cc(cc) {}
-    const unsigned cc;
-
-    template<typename A>
-    inline bool operator()(Meta2d& dst, const A& a, size_t x, size_t y)
-    {
-        MetaPixel src = a(x,y);
-        if(src.cc || !(src.flag & (PF_SOLID|PF_DILATED)))
-            return false;
-
-        dst(x,y).cc = cc;
-        return true;
-    }
-};
-
 struct RegionAnnotator
 {
     Meta2d& tofill;
     unsigned cc;
+
+    struct Filler
+    {
+        Filler(unsigned cc) : cc(cc) {}
+        const unsigned cc;
+
+        template<typename A>
+        inline bool operator()(Meta2d& dst, const A& a, size_t x, size_t y)
+        {
+            MetaPixel src = a(x,y);
+            if(src.cc || !(src.flag & (PF_SOLID|PF_DILATED)))
+                return false;
+
+            dst(x,y).cc = cc;
+            return true;
+        }
+    };
+
 
     RegionAnnotator(Meta2d& tofill) : tofill(tofill), cc(0) {}
 
     template<typename A>
     MetaPixel operator()(const A& a, size_t x, size_t y)
     {
-        int dummy = 0;
         size_t filled = floodfill(tofill, a, x, y, Filler(cc + 1));
         if(filled)
             ++cc;
 
+        return a(x,y);
+    };
+};
+
+struct NoHoleAnnotator
+{
+    Flags2d& tofill;
+
+    struct Filler
+    {
+        template<typename A>
+        inline bool operator()(Flags2d& dst, const A& a, size_t x, size_t y)
+        {
+            PixelFlag src = a(x,y);
+            if(src & (PF_NO_HOLE|PF_SOLID|PF_DILATED))
+                return false; // already annotated or solid. solid is never a hole
+
+            for(int yy = -1; yy <= 1; ++yy)
+                for(int xx = -1; xx <= 1; ++xx)
+                    if(a(x+xx,y+yy) & PF_NO_HOLE)
+                    {
+                        dst(x,y) |= PF_NO_HOLE;
+                        return true; // anything next to known-not-a-hole is also not a hole
+                    }
+
+            return false;
+        }
+    };
+
+
+    NoHoleAnnotator(Flags2d& tofill) : tofill(tofill) {}
+
+    template<typename A>
+    PixelFlag operator()(const A& a, size_t x, size_t y)
+    {
+        size_t filled = floodfill(tofill, a, x, y, Filler());
         return a(x,y);
     };
 };
@@ -225,6 +270,7 @@ static std::vector<Polygon> generatePolygons(const Meta2d& meta)
             MetaPixel p = meta(x,y);
             // Because we go through the image line by line, we will never hit an internal boundary (if there are holes) before hitting an external one
             // And since we then follow along that boundary and mark that CC as used, the internal boundary will never be used to generate a polygon
+            // Update: there are no holes anymore.
             if(p.flag & PF_BOUNDARY && !used(x,y))
                 if(const unsigned cc = p.cc)
                 {
@@ -333,6 +379,13 @@ static size_t doOneImage(std::vector<Polygon>& polyout, const Image2d& img, cons
     Flags2d solid;
     generate(solid, img, isNotFullyTransparent);
     dilate(solid, params.dilation, PF_EMPTY, addDilatedFlag);
+
+    // begin closing holes. anything that is non-solid and touches the border is not a hole.
+    generate2(solid, GetValue<PixelFlag>(solid, PF_NO_HOLE), NoHoleAnnotator(solid));
+
+    // any non-solid region that isn't known to be non-hole is actually a hole. Set PF_DILATED to close it.
+    generate2(solid, GetValue<PixelFlag>(solid, PF_SOLID), closeHoles);
+
     generate2(solid, GetValue<PixelFlag>(solid, PF_EMPTY), addBoundaryFlag);
     dilate(solid, params.extraband, PF_EMPTY, addPolygonFlag);
 
@@ -441,8 +494,9 @@ int main(int argc, char *argv[])
     //doOneImage("rock0002.png");
     //doOneImage("sunstatue-0001.png");
     //doOneImage("city-stairs.png");
-    //doOneImage("head.png");
-    doOneImage("bg-rock-0002.png");
+    doOneImage("head.png");
+    //doOneImage("bg-rock-0002.png");
+    //doOneImage("growth-0004.png");
 
 
     printf("Exiting.\n");
