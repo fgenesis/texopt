@@ -24,3 +24,11 @@ set(texpack_src
 
 add_executable(texpack ${texpack_src})
 target_link_libraries(texpack common ${SDL2_LIBRARY})
+
+
+set(recolor_src
+    recolor.cpp
+)
+
+add_executable(recolor ${recolor_src})
+target_link_libraries(recolor common ${SDL2_LIBRARY})
