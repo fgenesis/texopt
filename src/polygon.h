@@ -17,6 +17,12 @@ struct Point2d
 
     inline bool operator==(const Point2d& o) const { return x == o.x && y == o.y; }
     inline bool operator!=(const Point2d& o) const { return !(*this == o); }
+
+    Point2d to(const Point2d& dst) const
+    {
+        Point2d ret { dst.x - x, dst.y - y, flags };
+        return ret;
+    }
 };
 
 struct Line2d
@@ -125,6 +131,41 @@ struct Polygon
         reduced.points.resize(nsz);
 
         return reduced;
+    }
+
+    bool isConvexPoint(size_t id) const
+    {
+        Point2d prev = getPoint(id - 1);
+        Point2d p = getPoint(id);
+        Point2d next = getPoint(id + 1);
+
+        Point2d dprev = p.to(prev);
+        Point2d dnext = p.to(next);
+
+        /*float vax = (float)dprev.x;
+        float vay = (float)dprev.y;
+        float vbx = (float)dnext.x;
+        float vby = (float)dnext.y;
+
+        float alen = std::sqrtf(vax*vax + vay*vay);
+        float blen = std::sqrtf(vbx*vbx + vby*vby);
+
+        vax /= alen;
+        vay /= alen;
+        vbx /= blen;
+        vby /= blen;*/
+
+        Point2d d = dprev.to(dnext);
+        float dx = float(d.x);
+        float dy = float(d.y);
+
+        float a = std::atan2f(dx, std::fabsf(dx));
+        a = (a/3.1415962f)*180;
+        if (dx < 0)
+            a = 180-a;
+        a += 90;
+        
+        return a >= 180;
     }
 
 private:
