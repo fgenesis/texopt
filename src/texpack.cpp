@@ -2,6 +2,7 @@
 #include "algo2d.h"
 #include "util.h"
 #include "polygon.h"
+#include "vertexbuf.h"
 #include <stdio.h>
 
 #ifdef _MSC_VER
@@ -454,7 +455,7 @@ static bool doOneImage(const char *fn)
     }
 
     PolyResult polys[Countof(s_params)];
-    size_t best = size_t(-1);
+    size_t bestscore = size_t(-1);
     size_t bestidx = 0;
 
     for(size_t i = 0; i < Countof(s_params); ++i)
@@ -469,14 +470,20 @@ static bool doOneImage(const char *fn)
         );
         polys[i].score = score;
 
-        if(score < best)
+        if(score < bestscore)
         {
-            best = score;
+            bestscore = score;
             bestidx = i;
         }
     }
 
-    Image2d out = embossImage(img, polys[bestidx].polys);
+    const PolyResult& best = polys[bestidx];
+
+    //std::vector<unsigned> strip;
+    //size_t striplen = genIndexBuffer_Strip(strip, &best.polys[0], best.polys.size());
+
+
+    Image2d out = embossImage(img, best.polys);
     out.writePNG("embossed-best.png");
 
     return true;
@@ -486,7 +493,7 @@ static bool doOneImage(const char *fn)
 
 int main(int argc, char *argv[])
 {
-    //doOneImage("gear.png");
+    doOneImage("gear.png");
     //doOneImage("face.png");
     //doOneImage("menu-frame2.png");
     //doOneImage("pyramid-dragon-bg.png");
@@ -494,7 +501,7 @@ int main(int argc, char *argv[])
     //doOneImage("rock0002.png");
     //doOneImage("sunstatue-0001.png");
     //doOneImage("city-stairs.png");
-    doOneImage("head.png");
+    //doOneImage("head.png");
     //doOneImage("bg-rock-0002.png");
     //doOneImage("growth-0004.png");
 

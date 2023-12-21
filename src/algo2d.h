@@ -92,3 +92,9 @@ T perpendicular_distance(P p, P p1, P p2)
     T len = std::sqrt(T(d.x * d.x + d.y * d.y));
     return std::abs(T(p.x * d.y - p.y * d.x + p2.x * p1.y - p2.y * p1.x)) / len;
 }
+
+template<typename P>
+size_t cross(const P& a, const P& b, const P& c)
+{
+    return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+}

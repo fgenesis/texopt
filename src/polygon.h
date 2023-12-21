@@ -13,16 +13,47 @@ enum PointFlags
 struct Point2d
 {
     size_t x, y;
-    PointFlags flags;
+
+    union
+    {
+        PointFlags flags;
+        unsigned idx;
+    } u;
 
     inline bool operator==(const Point2d& o) const { return x == o.x && y == o.y; }
     inline bool operator!=(const Point2d& o) const { return !(*this == o); }
 
     Point2d to(const Point2d& dst) const
     {
-        Point2d ret { dst.x - x, dst.y - y, flags };
+        Point2d ret { dst.x - x, dst.y - y, u };
         return ret;
     }
+};
+
+struct ivec2
+{
+    size_t x, y;
+
+    inline bool operator==(const ivec2& o) const { return x == o.x && y == o.y; }
+    inline bool operator!=(const ivec2& o) const { return !(*this == o); }
+
+    ivec2 delta(ivec2 other) const
+    {
+        ivec2 ret { x - other.x, y - other.y };
+        return ret;
+    }
+
+    s64 dot(ivec2 other) const
+    {
+        return x * other.x + y * other.y;
+    }
+
+    s64 cross(ivec2 other) const
+    {
+        return x * other.y - y * other.x;
+    }
+
+
 };
 
 struct Line2d
@@ -34,6 +65,11 @@ struct Line2d
     {
         return linecast(p0, p1, f, NULL);
     }
+};
+
+struct Tri
+{
+    size_t a, b, c;
 };
 
 // closed-loop polygon
@@ -133,6 +169,10 @@ struct Polygon
         return reduced;
     }
 
+    bool triangulate(std::vector<Tri>& tris) const;
+
+
+#if 0
     bool isConvexPoint(size_t id) const
     {
         Point2d prev = getPoint(id - 1);
@@ -164,11 +204,116 @@ struct Polygon
         if (dx < 0)
             a = 180-a;
         a += 90;
-        
         return a >= 180;
     }
 
+    bool isClockwise() const
+    {
+        Point2d bottomRight = points[0];
+        size_t bottomRightIndex = 0;
+
+        const size_t N = points.size();
+        for (size_t i = 0; i < N; i++)
+        {
+            const Point2d p = points[i];
+            const bool check = p.y != bottomRight.y ? p.y < bottomRight.y : p.x > bottomRight.x;
+            if (check)
+            {
+                bottomRight = p;
+                bottomRightIndex = i;
+            }
+        }
+
+        const size_t prevIdx = (N + bottomRightIndex - 1) % N;
+        const size_t nextIdx = (bottomRightIndex + 1) % N;
+
+        return !isInternal(bottomRightIndex, prevIdx, nextIdx);
+    }
+
+    void triangulate(std::vector<Tri>& result) const
+    {
+        size_t n = points.size();
+        if(n < 3)
+            return;
+        std::vector<Point2d> pp = points;
+        std::vector<size_t> ear;
+        for (size_t i = 0; i < n; i++)
+        {
+            pp[i].u.idx = (unsigned)i;
+
+            size_t prev = (i + n - 1) % n;
+            size_t next = (i + 1) % n;
+            for (size_t j = 0; j < n; j++)
+            {
+                if (j == i || j == prev || j == next)
+                    continue;
+                if (cross(pp[prev], pp[i], pp[j]) >= 0
+                 && cross(pp[i], pp[next], pp[j]) >= 0
+                 && cross(pp[next], pp[prev], pp[j]) >= 0
+                )
+                    goto skip;
+            }
+            ear.push_back(i);
+            skip: ;
+        }
+        while (!ear.empty())
+        {
+            const size_t i = ear.back();
+            ear.pop_back();
+            const size_t prev = (i + n - 1) % n;
+            const size_t next = (i + 1) % n;
+            Tri tri { pp[prev].u.idx, pp[i].u.idx, pp[next].u.idx }; // save indices in the original polygon
+            result.push_back(tri);
+            pp.erase(pp.begin() + i);
+            --n;
+            const size_t prev_prev = (prev + n - 1) % n;
+            const size_t next_next = (next + 1) % n;
+            if (prev != next_next)
+                for (size_t j = 0; j < n; j++)
+                {
+                    if (j == prev || j == next_next)
+                        continue;
+                    if (cross(pp[prev], pp[next_next], pp[j]) < 0)
+                        ear.push_back(prev);
+                }
+            if (prev_prev != next)
+                for (int j = 0; j < n; j++) {
+                    if (j == prev_prev || j == next)
+                        continue;
+                    if (cross(pp[prev_prev], pp[next], pp[j]) < 0)
+                        ear.push_back(next);
+                }
+        }
+    }
+#endif
+
 private:
+
+    ivec2 _vec(int i) const
+    {
+        Point2d p = getPoint(i);
+        ivec2 v { p.x, p.y };
+        return v;
+    }
+
+    ivec2 _vec(size_t i) const
+    {
+        Point2d p = points[i];
+        ivec2 v { p.x, p.y };
+        return v;
+    }
+
+    bool isInternal(size_t originIdx, size_t prevIdx, size_t nextIdx) const
+    {
+        ivec2 origin = _vec(originIdx);
+        ivec2 next = _vec(nextIdx);
+        ivec2 prev = _vec(prevIdx);
+        ivec2 localPrev = prev.delta(origin);
+        ivec2 localNext = next.delta(origin);
+        s64 cross = localNext.cross(localPrev);
+        return cross > 0;
+    }
+
     static size_t douglas_peucker(Point2d *pdst, size_t dstsize, const Point2d *points, const char *keep, size_t n, float epsilon)
     {
         assert(n >= 2);

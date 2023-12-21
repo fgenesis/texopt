@@ -20,6 +20,12 @@ set(texpack_src
     texpack.cpp
     polygon.cpp
     polygon.h
+    vertexbuf.cpp
+    vertexbuf.h
+    atlas.cpp
+    atlas.h
+    stripifier.cpp
+    stripifier.h
 )
 
 add_executable(texpack ${texpack_src})

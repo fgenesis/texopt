@@ -1,3 +1,8 @@
+// quick hack because i'm either too dumb to use paint programs
+// or because their layer blending modes are not dumb enough to
+// simply do what opengl's alpha blending with color multiplier does.
+// TL;DR recolor white-on-transparent to color-on-transparent.
+
 #include <stdio.h>
 #include "image2d.h"
 
@@ -14,10 +19,10 @@ static Pixel conv(Pixel in, Colorf c)
 {
     Pixel out =
     {
-        in.r * c.r,
-        in.g * c.g,
-        in.b * c.b,
-        in.a
+        (unsigned char)(in.r * c.r),
+        (unsigned char)(in.g * c.g),
+        (unsigned char)(in.b * c.b),
+        (unsigned char)(in.a)
     };
     return out;
 }

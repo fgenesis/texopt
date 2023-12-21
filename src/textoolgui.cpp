@@ -37,6 +37,7 @@ static glm::ivec2 clickpos;
 static float rescale = 1.0f;
 static float displayscale = 1.0f;
 static std::string texFn;
+static bool flip;
 
 // output tex
 static Texture texout;
@@ -59,10 +60,11 @@ static void fitToSize(const Image2d& img, const Texture& tex);
 struct PerFileSettings
 {
     PerFileSettings()
-        : scale(1.0f), offx(0), offy(0) {}
+        : scale(1.0f), offx(0), offy(0), fh(false) {}
     std::string outfn;
     float scale;
     int offx, offy;
+    bool fh;
 };
 
 typedef std::map<std::string, PerFileSettings> SettingsMap;
@@ -92,7 +94,10 @@ static void loadSettings(const std::string& dir)
             std::istringstream is(line);
             PerFileSettings se;
             if(is >> tfile >> se.outfn >> se.offx >> se.offy >> se.scale)
+            {
+                is >> se.fh; // added later
                 settings[tfile] = se;
+            }
         }
     }
     f.close();
@@ -115,7 +120,7 @@ static void saveSettings(const std::string& dir)
             continue;
         }
         const PerFileSettings& se = it->second;
-        f << it->first << "\t" << se.outfn << "\t" << se.offx << "\t" << se.offy << "\t" << se.scale << "\n";
+        f << it->first << "\t" << se.outfn << "\t" << se.offx << "\t" << se.offy << "\t" << se.scale << "\t" << se.fh << "\n";
     }
     f.close();
 }
@@ -125,11 +130,22 @@ static glm::uvec2 nextPowerOf2(glm::uvec2 in)
     return glm::uvec2(nextPowerOf2(in.x), nextPowerOf2(in.y));
 }
 
-
-static void onImgInChanged(const char *fn)
+static void onImgOutChanged()
 {
     texout.import(imgout);
+    texout.centerOffs = glm::ivec2(0);
+}
 
+static void onImgInChanged()
+{
+    texin.import(imgin);
+    imgout = imgin;
+    onImgOutChanged();
+}
+
+
+static void onImgInLoaded(const char *fn)
+{
     // -- apply stored settings --
     if(fn)
     {
@@ -139,16 +155,21 @@ static void onImgInChanged(const char *fn)
         texFn = fn;
         loadCurrentSettings();
     }
+
+    onImgInChanged();
 }
 
-static void onImgOutChanged()
-{
-    texout.import(imgout);
-    texout.centerOffs = glm::ivec2(0);
-}
 
-static void applySettings(const PerFileSettings& se)
+
+static void applySettings(const PerFileSettings& se, bool canflip)
 {
+    flip = se.fh;
+    if(flip && canflip)
+    {
+        imgin.fh();
+        onImgInChanged();
+    }
+
     texin.centerOffs = glm::ivec2(se.offx, se.offy);
     rescale = se.scale;
     strncpy(s_savename, se.outfn.c_str(), sizeof(s_savename));
@@ -156,12 +177,12 @@ static void applySettings(const PerFileSettings& se)
     fitToSize(imgin, texin);
 }
 
-static void applySettings(const std::string& name)
+static void applySettings(const std::string& name, bool canflip)
 {
     const std::string fn = filename(name);
     SettingsMap::const_iterator it = settings.find(fn);
     if(it != settings.end())
-        applySettings(it->second);
+        applySettings(it->second, canflip);
     else
     {
         s_savenameChanged = true;
@@ -179,6 +200,7 @@ static bool updateSettings()
         se.offy = texin.centerOffs.y;
         se.scale = rescale;
         se.outfn = s_savename;
+        se.fh = flip;
         return true;
     }
     return false;
@@ -197,7 +219,7 @@ static std::string loadCurrentSettings()
     loadSettings(olddn);
 
     if(autoloadsettings)
-        applySettings(texFn);
+        applySettings(texFn, true);
 
     return olddn;
 }
@@ -207,9 +229,7 @@ static bool setTex(const char *fn)
 {
     if(!imgin.load(fn))
         return false;
-    imgout = imgin;
-    texin.import(imgin);
-    onImgInChanged(fn);
+    onImgInLoaded(fn);
     return true;
 }
 
@@ -353,7 +373,7 @@ static void doBatch()
         if(setTex(fn.c_str()))
         {
             const PerFileSettings& se = it->second;
-            applySettings(se);
+            applySettings(se, false);
             //fitToSize(imgin, texin); // already called by applySettings()
             scaleImg();
             good += saveImg(se.outfn.c_str());
@@ -405,6 +425,12 @@ static void drawWindow()
     ImGui::SameLine();
     if(ImGui::Button("Fit to size/rot"))
         fitToSize(imgin, texin);
+    ImGui::SameLine();
+    if(ImGui::Checkbox("Flip", &flip))
+    {
+        imgin.fh();
+        onImgInChanged();
+    }
 
     ImGui::SliderFloat("##scaleslider", &rescale, 0, 1);
     ImGui::SameLine();

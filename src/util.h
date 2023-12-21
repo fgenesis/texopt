@@ -2,6 +2,13 @@
 
 #include <string>
 
+#ifdef _MSC_VER
+typedef __int64 s64;
+#else
+#include <stdint.h>
+typedef int64_t s64;
+#endif
+
 static const char DIRSEP =
 #ifdef _WIN32
 '\\'

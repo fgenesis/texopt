@@ -94,3 +94,10 @@ void Image2d::copyscaled(const Image2d& src)
         3, 0, STBIR_EDGE_CLAMP, STBIR_FILTER_DEFAULT, STBIR_COLORSPACE_LINEAR, NULL
     );
 }
+
+Image2d& Image2d::operator=(const Image2d& o)
+{
+    this->init(o.width(), o.height());
+    this->copy2d(0, 0, o, 0, 0, o.width(), o.height());
+    return *this;
+}

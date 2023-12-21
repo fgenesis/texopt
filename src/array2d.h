@@ -84,4 +84,21 @@ public:
 
     const T *row(size_t y) const { return &_v[y * _w]; }
           T *row(size_t y)       { return &_v[y * _w]; }
+
+    void fh()
+    {
+        const size_t w = width();
+        const size_t h = height();
+        for(size_t y = 0; y < h; ++y)
+        {
+            T *begin = row(y);
+            T *end = begin + w;
+            while(begin < end)
+            {
+                std::swap(*begin, *end);
+                ++begin;
+                --end;
+            }
+        }
+    }
 };

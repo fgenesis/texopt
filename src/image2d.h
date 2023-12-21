@@ -25,4 +25,5 @@ public:
     AABB getAlphaRegion() const;
     void copyscaled(const Image2d& src); // resize this to desired size before calling this
 
+    Image2d& operator=(const Image2d& o);
 };
