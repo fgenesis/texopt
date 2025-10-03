@@ -397,6 +397,7 @@ size_t Atlas::exportVerticesF(std::vector<vec2>& dst)
 
 size_t Atlas::exportIndices(std::vector<unsigned>& dst, bool keepRestart)
 {
+    const size_t oldsize = dst.size();
     const bool degenerate = !keepRestart;
     size_t offset = 0;
 
@@ -432,4 +433,5 @@ size_t Atlas::exportIndices(std::vector<unsigned>& dst, bool keepRestart)
 
         offset += frag.points.size();
     }
+    return dst.size() - oldsize;
 }

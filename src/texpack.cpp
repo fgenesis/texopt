@@ -28,7 +28,7 @@ int main(int argc, char *argv[])
 {
     Atlas atlas;
     atlas.resize(2048, 1024);
-    atlas.updateDistanceMapInterval = 5;
+    //atlas.updateDistanceMapInterval = 5;
 
     /*doOneImage("gear.png");
     doOneImage("face.png");

@@ -146,7 +146,7 @@ size_t downsample4x4(Array2d<unsigned char>& out, Array2d<unsigned char>& in)
 
 void triwireframe(Image2d& out, ivec2 offset, const uvec2* points, const Tri* tris, size_t ntris, Pixel color)
 {
-    std::set<unsigned> used;
+    std::set<unsigned> used; // avoid drawing lines multiple times, in either direction
     const uvec2 uoffset(offset);
     for(size_t i = 0; i < ntris; ++i)
     {

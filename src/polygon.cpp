@@ -57,124 +57,6 @@ AABB Polygon::getBoundingRect() const
     return box;
 }
 
-bool Polygon::triangulate_badly(std::vector<Tri>& results) const
-{
-    const size_t N = points.size();
-
-    if(points.size() < 3)
-        return false;
-
-    // Polygon orientation
-    bool ccw = false;
-    {
-        Point2d left = points[0];
-        size_t index = 0;
-
-        for(size_t i = 0; i < N; ++i)
-        {
-            if(points[i].x < left.x ||
-              (points[i].x == left.x && points[i].y < left.y))
-            {
-                index = i;
-                left = points[i];
-            }
-        }
-
-        Point2d tri[]
-        {
-            points[(index > 0) ? index - 1 : N - 1],
-            points[index],
-            points[(index < N) ? index + 1 : 0]
-        };
-        ccw = orientation(tri[0], tri[1], tri[2]);
-    }
-
-    // We know there will be vertex_count - 2 triangles made.
-    results.reserve(results.size() + N - 2);
-
-    // store indices in original, unmodified polygon
-    std::vector<Point2d> pp = points;
-    for(size_t i = 0; i < N; ++i)
-        pp[i].u.idx = i;
-
-    std::vector<size_t> reflex;
-    for(;;)
-    {
-        const size_t n = pp.size();
-        if(n < 3)
-            break;
-        reflex.clear();
-        int eartip = -1, index = -1;
-        for(size_t i = 0; i < pp.size(); ++i)
-        {
-            ++index;
-            if(eartip >= 0) break;
-
-            size_t p = (index > 0) ? index - 1 : n - 1;
-            size_t q = (index < n) ? index + 1 : 0;
-
-            Point2d tri[] = { pp[p], pp[i], pp[q] };
-            if(orientation(tri[0], tri[1], tri[2]) != ccw)
-            {
-                reflex.push_back(index);
-                continue;
-            }
-
-            bool ear = true;
-            for(size_t ii = 0; ii < reflex.size(); ++ii)
-            {
-                size_t j = reflex[ii];
-                if(j == p || j == q) continue;
-                if(in_triangle(pp[j], pp[p], pp[i], pp[q]))
-                {
-                    ear = false;
-                    break;
-                }
-            }
-
-            if(ear)
-            {
-                std::vector<Point2d>::iterator
-                    j = pp.begin() + index + 1,
-                    k = pp.end();
-
-                for( ; j != k; ++j)
-                {
-                    const Point2d& v = *j;
-
-                    if(&v == &pp[p] ||
-                       &v == &pp[q] ||
-                       &v == &pp[index]) continue;
-
-                    if(in_triangle(v, pp[p], pp[i], pp[q]))
-                    {
-                        ear = false;
-                        break;
-                    }
-                }
-            }
-
-            if(ear)
-                eartip = index;
-        }
-
-        if(eartip < 0)
-            break;
-
-        size_t p = (eartip > 0) ? eartip - 1 : n - 1;
-        size_t q = (eartip < n) ? eartip + 1 : 0;
-
-        // Create the triangulated piece.
-        Tri out = { pp[p].u.idx, pp[eartip].u.idx, pp[q].u.idx };
-        results.push_back(out);
-
-        // Clip the ear from the polygon.
-        pp.erase(pp.begin() + eartip);
-    }
-
-    return true;
-}
-
 bool Polygon::triangulate(std::vector<Tri>& results) const
 {
     TPPLPoly tp;
@@ -206,6 +88,60 @@ bool Polygon::triangulate(std::vector<Tri>& results) const
     }
 
     return true;
+}
+
+bool Polygon::isInternal(size_t originIdx, size_t prevIdx, size_t nextIdx) const
+{
+    ivec2 origin = _vec(originIdx);
+    ivec2 next = _vec(nextIdx);
+    ivec2 prev = _vec(prevIdx);
+    ivec2 localPrev = prev - origin;
+    ivec2 localNext = next - origin;
+    return cross(localNext, localPrev) > 0;
+}
+
+size_t Polygon::douglas_peucker(Point2d* pdst, size_t dstsize, const Point2d* points, const char* keep, size_t n, float epsilon)
+{
+    assert(n >= 2);
+    assert(epsilon >= 0);
+
+    float max_dist = 0;
+    size_t index = 0;
+    size_t dstidx = 0;
+
+    for (size_t i = 1; i + 1 < n; ++i)
+    {
+        if(keep[i])
+            continue;
+
+        float dist = perpendicular_distance<float>(points[i], points[0], points[n - 1]);
+        if (dist > max_dist)
+        {
+            max_dist = dist;
+            index = i;
+        }
+    }
+
+    if (max_dist > epsilon)
+    {
+        size_t n1 = douglas_peucker(pdst, dstsize, points, keep, index + 1, epsilon);
+        if (dstsize >= n1 - 1)
+        {
+            dstsize -= n1 - 1;
+            pdst += n1 - 1;
+        }
+        else
+            dstsize = 0;
+
+        size_t n2 = douglas_peucker(pdst, dstsize, points + index, keep + index, n - index, epsilon);
+        return n1 + n2 - 1;
+    }
+    if (dstsize >= 2)
+    {
+        pdst[0] = points[0];
+        pdst[1] = points[n - 1];
+    }
+    return 2;
 }
 
 Point2d Polygon::getPoint(int i) const // translate out-of-bounds access to closed loop
