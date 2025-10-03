@@ -30,7 +30,7 @@ public:
 
     bool build();
     void resize(size_t w, size_t h);
-    bool tryFitAt_Coarse(float *pscore, const AtlasFragment& frag, size_t xo, size_t yo, float curscore) const; // < 0 if failed
+    bool tryFitAt_Coarse(float *pscore, const AtlasFragment& frag, size_t xo, size_t yo, float curscore) const;
     void renderCurrentState(Image2d& out);
     void dumpState(size_t i);
     size_t exportVerticesU(std::vector<uvec2> &dst);

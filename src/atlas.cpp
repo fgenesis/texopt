@@ -137,15 +137,6 @@ bool Atlas::build()
             if(_fitOne(frag, fitted == 0))
             {
                 ++fitted;
-/*#ifdef _DEBUG
-                {
-                    char buf[512];
-                    sprintf(buf, "../atlases/%05u_%s.png", i, out.filename.c_str());
-                    const std::string dfn = buf;
-                    CreateDirRec(StripFileName(dfn).c_str());
-                    stbi_write_png(dfn.c_str(), out.sz.x, out.sz.y, 4, &out.pixels[0], out.sz.x * sizeof(u32));
-                }
-#endif*/
                 printf("Done. Fitted: %u/%u\n", (unsigned)fitted, (unsigned)frags.size());
                 break;
             }

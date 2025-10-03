@@ -16,26 +16,10 @@ Image2d::Image2d(size_t w, size_t h)
 }
 
 
-bool Image2d::writePNG(const char* fn)
+bool Image2d::writePNG(const char* fn) const
 {
     const size_t N = width() * height();
-    stbi_uc * const d = (stbi_uc*)malloc(N * 4);
-    if(!d)
-        return false;
-    stbi_uc *p = d;
-
-    for(size_t i = 0; i < N; ++i)
-    {
-        Pixel c = _v[i];
-        *p++ = c.r;
-        *p++ = c.g;
-        *p++ = c.b;
-        *p++ = c.a;
-    }
-
-    int ok = stbi_write_png(fn, (int)width(), (int)height(), 4, d, 0);
-    free(d);
-    return !!ok;
+    return N && stbi_write_png(fn, (int)width(), (int)height(), 4, (stbi_uc*)&_v[0], 0);
 }
 
 
@@ -43,22 +27,12 @@ bool Image2d::load(const char* fn)
 {
     int x, y, c;
     stbi_uc * const d = stbi_load(fn, &x, &y, &c, 4);
-    if(!d)
+    if(!d || !x || !y)
         return false;
 
     this->init(x, y);
-    const size_t N = size_t(x) * size_t(y);
-    stbi_uc *p = d;
-    for(size_t i = 0; i < N; ++i)
-    {
-        Pixel pix;
-        pix.r = *p++;
-        pix.g = *p++;
-        pix.b = *p++;
-        pix.a = *p++;
-        _v[i] = pix;
+    memcpy(&_v[0], d, size_t(x) * size_t(y) * sizeof(Pixel));
 
-    }
     free(d);
     return true;
 }

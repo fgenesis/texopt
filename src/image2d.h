@@ -20,7 +20,7 @@ class Image2d : public Array2d<Pixel>
 public:
     Image2d();
     Image2d(size_t w, size_t h);
-    bool writePNG(const char* fn);
+    bool writePNG(const char* fn) const;
     bool load(const char* fn);
     AABB getAlphaRegion() const;
     void copyscaled(const Image2d& src); // resize this to desired size before calling this
