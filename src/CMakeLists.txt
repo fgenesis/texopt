@@ -26,10 +26,16 @@ set(texpack_src
     atlas.h
     stripifier.cpp
     stripifier.h
+    dt2d.cpp
+    dt2d.h
+    trifill.cpp
+    trifill.h
+    mkpoly_twoband.cpp
+    mkpoly.h
 )
 
 add_executable(texpack ${texpack_src})
-target_link_libraries(texpack common ${SDL2_LIBRARY})
+target_link_libraries(texpack common)
 
 
 set(recolor_src

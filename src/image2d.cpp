@@ -1,4 +1,5 @@
 #include "image2d.h"
+#include "image2d.h"
 #include "stb_image.h"
 #include "stb_image_write.h"
 #include "stb_image_resize.h"
@@ -93,6 +94,17 @@ void Image2d::copyscaled(const Image2d& src)
         (unsigned char*)data(), _w, _h, 0, 4,
         3, 0, STBIR_EDGE_CLAMP, STBIR_FILTER_DEFAULT, STBIR_COLORSPACE_LINEAR, NULL
     );
+}
+
+void Image2d::maskblit(const Image2d& top)
+{
+    assert(width() == top.width() && height() == top.height());
+    const size_t n = width() * height();
+    Pixel *dst = data();
+    const Pixel *p = top.data();
+    for(size_t i = 0; i < n; ++i, ++dst, ++p)
+        if(p->a)
+            *dst = *p;
 }
 
 Image2d& Image2d::operator=(const Image2d& o)

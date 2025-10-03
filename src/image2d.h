@@ -24,6 +24,37 @@ public:
     bool load(const char* fn);
     AABB getAlphaRegion() const;
     void copyscaled(const Image2d& src); // resize this to desired size before calling this
+    void maskblit(const Image2d& top);
 
     Image2d& operator=(const Image2d& o);
 };
+
+
+struct OutlineDraw
+{
+    Image2d& dst;
+    const Image2d& test;
+    const Pixel pix;
+    OutlineDraw(Image2d& dst, const Image2d& test, Pixel pix) : dst(dst), test(test), pix(pix) {}
+    bool operator()(size_t x, size_t y)
+    {
+        const Pixel here = test(x, y);
+        if(here.a)
+            return true; // Should never hit a non-fully-transparent pixel
+        dst(x,y) = pix;
+        return false;
+    }
+};
+
+struct LineDraw
+{
+    Image2d& img;
+    const Pixel pix;
+    LineDraw(Image2d& img, Pixel pix) : img(img), pix(pix) {}
+    bool operator()(size_t x, size_t y)
+    {
+        img(x,y) = pix;
+        return false;  // never collide -> always draw the full line
+    }
+};
+

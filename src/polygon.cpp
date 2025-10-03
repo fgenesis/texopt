@@ -1,4 +1,7 @@
 #include "polygon.h"
+#include "polypartition.h"
+
+size_t Polygon::VertexPenalty = 1024;
 
 // via:
 // https://abitwise.blogspot.com/2013/09/triangulating-concave-and-convex.html
@@ -26,7 +29,35 @@ static bool in_triangle(const Point2d& V, const Point2d& A,
     return alpha + beta >= 1;
 }
 
-bool Polygon::triangulate(std::vector<Tri>& results) const
+size_t Polygon::calcScore() const
+{
+    size_t area = calcArea(); // smaller is better
+
+    size_t tris = points.size(); // FIXME: actually use #tris
+
+    // TODO: include relative size too
+    return tris * VertexPenalty + area;
+}
+
+AABB Polygon::getBoundingRect() const
+{
+    AABB box = {size_t(-1),size_t(-1),0,0};
+
+    const size_t N = points.size();
+
+    for(size_t i = 0; i < N; ++i)
+    {
+        const Point2d& p = points[i];
+        box.x1 = std::min(box.x1, p.x);
+        box.y1 = std::min(box.y1, p.y);
+        box.x2 = std::max(box.x2, p.x);
+        box.y2 = std::max(box.y2, p.y);
+    }
+
+    return box;
+}
+
+bool Polygon::triangulate_badly(std::vector<Tri>& results) const
 {
     const size_t N = points.size();
 
@@ -143,3 +174,63 @@ bool Polygon::triangulate(std::vector<Tri>& results) const
 
     return true;
 }
+
+bool Polygon::triangulate(std::vector<Tri>& results) const
+{
+    TPPLPoly tp;
+    tp.Init(points.size());
+    //for(size_t i = points.size(); i --> 0; )
+    for(size_t i = 0; i < points.size(); ++i)
+    {
+        tp[i].x = points[i].x;
+        tp[i].y = points[i].y;
+        tp[i].id = i;
+    }
+
+    TPPLPolyList tris;
+    TPPLPartition pp;
+    if(!pp.Triangulate_OPT(&tp, &tris))
+        return false;
+
+    results.reserve(results.size() + tris.size());
+
+    for(TPPLPolyList::iterator it = tris.begin(); it != tris.end(); ++it)
+    {
+        TPPLPoly& o = *it;
+        assert(o.GetNumPoints() == 3);
+        Tri t;
+        t.a = o[0].id;
+        t.b = o[1].id;
+        t.c = o[2].id;
+        results.push_back(t);
+    }
+
+    return true;
+}
+
+Point2d Polygon::getPoint(int i) const // translate out-of-bounds access to closed loop
+{
+    int n = (int)points.size();
+    if(i < 0)
+        i += n;
+    else if(i >= n)
+        i -= n;
+    return points[i];
+}
+
+size_t Polygon::calcArea() const
+{
+    int area = 0;
+    const size_t N = points.size();
+    size_t j = N-1;
+
+    for (size_t i = 0; i < N; ++i)
+    {
+        const Point2d& pi = points[i];
+        const Point2d& pj = points[j];
+        area += (int(pj.x)+int(pi.x)) * (int(pj.y)-int(pi.y));
+        j = i;
+    }
+    return (size_t)std::abs(area / 2);
+}
+

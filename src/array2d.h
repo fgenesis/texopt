@@ -14,8 +14,8 @@ protected:
     Array2dAny(size_t w, size_t h) : _w(w), _h(h) {}
 
 public:
-    size_t width() const {return _w;}
-    size_t height() const {return _h;}
+    inline size_t width() const {return _w;}
+    inline size_t height() const {return _h;}
 };
 
 template<typename T>
@@ -60,6 +60,21 @@ public:
             const T *srcrow = src.row(srcy + y);
             std::copy(srcrow + srcx, srcrow + srcx + w, dstrow + dstx);
         }
+    }
+
+    void resize(size_t w, size_t h)
+    {
+        if(_w && _h)
+        {
+            Array2d<T> cp;
+            cp.swap(*this);
+            init(w, h);
+            size_t cpw = std::min(w, cp.width());
+            size_t cph = std::min(h, cp.height());
+            copy2d(0, 0, cp, 0, 0, cpw, cph);
+        }
+        else
+            init(w, h);
     }
 
     void swap(Array2d<T>& other)

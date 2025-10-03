@@ -4,6 +4,8 @@
 #include <cmath>
 #include <assert.h>
 #include "algo2d.h"
+#include "vec.h"
+#include "image2d.h"
 
 enum PointFlags
 {
@@ -30,35 +32,11 @@ struct Point2d
     }
 };
 
-struct ivec2
+
+template<typename P>
+struct Line2dT
 {
-    size_t x, y;
-
-    inline bool operator==(const ivec2& o) const { return x == o.x && y == o.y; }
-    inline bool operator!=(const ivec2& o) const { return !(*this == o); }
-
-    ivec2 delta(ivec2 other) const
-    {
-        ivec2 ret { x - other.x, y - other.y };
-        return ret;
-    }
-
-    s64 dot(ivec2 other) const
-    {
-        return x * other.x + y * other.y;
-    }
-
-    s64 cross(ivec2 other) const
-    {
-        return x * other.y - y * other.x;
-    }
-
-
-};
-
-struct Line2d
-{
-    Point2d p0, p1;
+    P p0, p1;
 
     template<typename F>
     bool intersect(F& f) const
@@ -66,6 +44,9 @@ struct Line2d
         return linecast(p0, p1, f, NULL);
     }
 };
+
+typedef Line2dT<Point2d> Line2d;
+typedef Line2dT<uvec2> Line2dv;
 
 struct Tri
 {
@@ -75,33 +56,16 @@ struct Tri
 // closed-loop polygon
 struct Polygon
 {
+    static size_t VertexPenalty;
     std::vector<Point2d> points;
 
-    Point2d getPoint(int i) const // translate out-of-bounds access to closed loop
-    {
-        int n = (int)points.size();
-        if(i < 0)
-            i += n;
-        else if(i >= n)
-            i -= n;
-        return points[i];
-    }
+    Point2d getPoint(int i) const; // translate out-of-bounds access to closed loop
 
-    size_t calcArea() const
-    {
-        int area = 0;
-        const size_t N = points.size();
-        size_t j = N-1;
+    size_t calcArea() const;
 
-        for (size_t i = 0; i < N; ++i)
-        {
-            const Point2d& pi = points[i];
-            const Point2d& pj = points[j];
-            area += (int(pj.x)+int(pi.x)) * (int(pj.y)-int(pi.y));
-            j = i;
-        }
-        return (size_t)std::abs(area / 2);
-    }
+    size_t calcScore() const; // lower is better
+
+    AABB getBoundingRect() const;
 
 
     // can remove point if the new line does not cut into the pixel grid (for convex corners).
@@ -160,15 +124,20 @@ struct Polygon
         reduced.points.resize(N);
 
         std::vector<char> keep(N);
+        bool solid = false;
         for(int i = 0; i < int(N); ++i)
-            keep[i] = intersectSolid(i, f);
-
+        {
+            const bool solidnow = intersectSolid(i, f);
+            keep[i] = solidnow != solid;
+            solid = solidnow;
+        }
         size_t nsz = douglas_peucker(&reduced.points[0], N, &points[0], &keep[0], N, epsilon);
         reduced.points.resize(nsz);
 
         return reduced;
     }
 
+    bool triangulate_badly(std::vector<Tri>& tris) const;
     bool triangulate(std::vector<Tri>& tris) const;
 
 
@@ -292,14 +261,14 @@ private:
     ivec2 _vec(int i) const
     {
         Point2d p = getPoint(i);
-        ivec2 v { p.x, p.y };
+        ivec2 v { (int)p.x, (int)p.y };
         return v;
     }
 
     ivec2 _vec(size_t i) const
     {
         Point2d p = points[i];
-        ivec2 v { p.x, p.y };
+        ivec2 v { (int)p.x, (int)p.y };
         return v;
     }
 
@@ -308,10 +277,9 @@ private:
         ivec2 origin = _vec(originIdx);
         ivec2 next = _vec(nextIdx);
         ivec2 prev = _vec(prevIdx);
-        ivec2 localPrev = prev.delta(origin);
-        ivec2 localNext = next.delta(origin);
-        s64 cross = localNext.cross(localPrev);
-        return cross > 0;
+        ivec2 localPrev = prev - origin;
+        ivec2 localNext = next - origin;
+        return cross(localNext, localPrev) > 0;
     }
 
     static size_t douglas_peucker(Point2d *pdst, size_t dstsize, const Point2d *points, const char *keep, size_t n, float epsilon)

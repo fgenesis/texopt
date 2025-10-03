@@ -12,6 +12,13 @@ set(src
     miniz.cpp
     miniz.h
     nfd.h
+    polypartition.cpp
+    polypartition.h
+    tws_thread.h
+    dt.h
+    filesystem.cpp
+    filesystem.h
+    vec.h
 )
 
 add_library(dep ${src})
