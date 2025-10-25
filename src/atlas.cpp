@@ -132,7 +132,7 @@ bool Atlas::build()
 
         while(true)
         {
-            //dumpState(i);
+            dumpState(i);
 
             if(_fitOne(frag, fitted == 0))
             {

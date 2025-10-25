@@ -6,6 +6,7 @@
 #include "vertexbuf.h"
 #include <stdio.h>
 #include <set>
+#include <sstream>
 
 #ifdef _MSC_VER
 #pragma warning(disable:26812) // unscoped enum
@@ -353,7 +354,6 @@ static bool drawPolygonOutline(Image2d& out, const Image2d& src, const Polygon *
     return collision;
 }
 
-#if 0
 static Image2d drawTrianglesOnImage(const Image2d& in, const Point2d *points, const unsigned *indices, size_t n, bool fan)
 {
     // FIXME: should use stripListToTris() instead
@@ -419,7 +419,7 @@ static Image2d drawTrianglesOnImage(const Image2d& in, const Point2d *points, co
     }
     return out;
 }
-#endif
+
 
 static float shrinkageRatio(const Array2dAny& a, const Polygon& poly)
 {
@@ -438,7 +438,7 @@ struct Params
 
 static size_t doPass(std::vector<Polygon>& polyout, const Image2d& img, const Params& params)
 {
-    //Image2d out;
+    Image2d out;
 
     Flags2d solid;
     generate(solid, img, isNotFullyTransparent);
@@ -467,18 +467,23 @@ static size_t doPass(std::vector<Polygon>& polyout, const Image2d& img, const Pa
         solid(xmax, y) |= PF_POLYGONBAND;
     }
 
-    /*generate(out, solid, ShowBit(PF_BOUNDARY));
-    out.writePNG("boundary.png");
+
+    char dbuf[128];
+    sprintf(dbuf, "/%02u_%02u_%02u.png", (unsigned)params.dilation, (unsigned)params.extraband,  (unsigned)params.segmentdist);
+    std::string dd = dbuf;
+
+    generate(out, solid, ShowBit(PF_BOUNDARY));
+    out.writePNG(("_boundary" + dd).c_str());
     generate(out, solid, ShowBit(PF_DILATED));
-    out.writePNG("dilated.png");
+    out.writePNG(("_dilated" + dd).c_str());
     generate(out, solid, ShowBit(PF_POLYGONBAND));
-    out.writePNG("polygonband.png");*/
+    out.writePNG(("_polygonband" + dd).c_str());
 
     Meta2d meta;
     distributeConnectedRegions(meta, solid);
 
-    /*generate(out, meta, ShowBitAndCC(PF_BOUNDARY));
-    out.writePNG("cc.png");*/
+    generate(out, meta, ShowBitAndCC(PF_BOUNDARY));
+    out.writePNG(("_cc" + dd).c_str());
 
     std::vector<Polygon> polys;
     if(!generatePolygons(polys, meta))
@@ -517,6 +522,24 @@ static size_t doPass(std::vector<Polygon>& polyout, const Image2d& img, const Pa
             100 * shrinkageRatio(img, last), unsigned(myscore));
         score += myscore;
     }
+
+
+
+    ///// DEBUG //////
+
+
+    generate(out, solid, ShowBit(PF_POLYGONBAND));
+    std::vector<unsigned> strip;
+    size_t striplen = genIndexBuffer_Strip(strip, &simplepolys[0], simplepolys.size(), false);
+    std::vector<Point2d> allpoints;
+    allpoints.reserve(strip.size() / 2);
+    for(size_t i = 0; i < simplepolys.size(); ++i)
+        allpoints.insert(allpoints.end(), simplepolys[i].points.begin(), simplepolys[i].points.end());
+    out = drawTrianglesOnImage(out, allpoints.data(),strip.data(), strip.size(), false);
+
+    out.writePNG(("_polygon" + dd).c_str());
+
+    ////////////////////////
 
     polyout = simplepolys;
 

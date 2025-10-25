@@ -55,8 +55,10 @@ int main(int argc, char *argv[])
     doOneImage(atlas, "slide-0015.png");*/
 
     //atlas.addFile("bg-rock-0002.png");
+    atlas.addFile("gazebo-0001.png");
+    //atlas.addFile("pyramid-dragon-bg.png");
 
-    doDir(atlas, "naija");
+    //doDir(atlas, "naija");
 
 
     printf("Exiting.\n");
